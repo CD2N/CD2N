@@ -1,0 +1,9 @@
+[package]
+name = "justicar"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sgx-attestation = {path = "./sgx-attestation"}
+hex = "0.4.3"
+chrono = "0.4.38"
