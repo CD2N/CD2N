@@ -1,0 +1,9 @@
+[package]
+name = "justicar"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sgx-attestation = { workspace = true }
+hex = { workspace = true }
+chrono = { workspace = true }

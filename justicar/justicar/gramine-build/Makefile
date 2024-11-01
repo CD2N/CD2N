@@ -28,7 +28,7 @@ BIN_FILE = ../target/x86_64-unknown-linux-musl/release/${BIN_NAME}
 CARGO_ARGS = --target x86_64-unknown-linux-musl
 HOST_LIBC_DIR = /lib/x86_64-linux-musl
 else
-BIN_FILE = ../target/release/${BIN_NAME}
+BIN_FILE = ../../target/release/${BIN_NAME}
 CARGO_ARGS =
 HOST_LIBC_DIR = /lib/x86_64-linux-gnu
 endif
