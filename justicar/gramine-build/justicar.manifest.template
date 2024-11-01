@@ -4,7 +4,6 @@ entrypoint = "justicar"
 [loader]
 entrypoint = "file:{{ libos }}"
 log_level = "{{ log_level }}"
-argv0_override = "justicar"
 insecure__use_cmdline_argv = true
 
 [sys]
@@ -45,10 +44,8 @@ uri = "file:{{ storage_dir }}"
 
 [sgx]
 debug = false
-nonpie_binary = true
 enclave_size = "2G"
 max_threads = 128
-thread_num = 32
 remote_attestation = "{{ ra_type }}"
 {% if ra_type == "epid" %}
 ra_client_spid = "{{ ra_client_spid }}"

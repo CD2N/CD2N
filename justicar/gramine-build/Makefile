@@ -55,7 +55,7 @@ ${BIN_FILE}:
 ${BIN_NAME}: ${BIN_FILE}
 	cp ${BIN_FILE} ${BIN_NAME}
 
-${BIN_NAME}.manifest: ${BIN_NAME}.manifest.template
+${BIN_NAME}.manifest: ${BIN_NAME}.manifest.template ${LIBOS}
 	gramine-manifest \
 		-Dinstall_dir=$(INSTALL_DIR) \
 		-Dlog_level=$(GRAMINE_LOG_LEVEL) \

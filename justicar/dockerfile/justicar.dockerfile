@@ -72,7 +72,7 @@ COPY priv.build_stage .priv
 COPY gramine-build $HOME/${APP_NAME}/gramine-build
 COPY sgx-attestation $HOME/${APP_NAME}/sgx-attestation
 COPY src $HOME/${APP_NAME}/src
-COPY Cargo.toml Cargo.lock rust-toolchain.toml dockerfile/start_dcap_test.sh $HOME/${APP_NAME}/
+COPY Cargo.toml Cargo.lock rust-toolchain.toml dockerfile/start_justicar.sh $HOME/${APP_NAME}/
 
 RUN cd $HOME/${APP_NAME}/gramine-build && \
     PATH="$PATH:$HOME/.cargo/bin" make dist PREFIX="${APP_DEPLOYMENT_DIR}" && \
@@ -128,13 +128,13 @@ RUN DEBIAN_FRONTEND="noninteractive" apt-get update && \
         sgx-aesm-service \
         gramine && \
     DEBIAN_FRONTEND="noninteractive" apt-get clean -y
-
+RUN echo "Gramine SGX Version:" && gramine-sgx --version
 COPY --from=builder /root/.cargo/bin/sgx-detect /usr/local/bin
 
 ARG APP_DEPLOYMENT_DIR="/opt/justicar"
 
 COPY --from=builder ${APP_DEPLOYMENT_DIR} ${APP_DEPLOYMENT_DIR}
-ADD dockerfile/start_dcap_test.sh ${APP_DEPLOYMENT_DIR}/start_dcap_test.sh
+ADD dockerfile/start_justicar.sh ${APP_DEPLOYMENT_DIR}/start_justicar.sh
 
 ADD dockerfile/conf /opt/conf
 
@@ -147,4 +147,4 @@ ENV RUST_LOG="info"
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 
-CMD ["/bin/bash", "start_dcap_test.sh"]
+CMD ["/bin/bash", "start_justicar.sh"]
