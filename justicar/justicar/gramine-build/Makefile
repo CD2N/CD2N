@@ -38,9 +38,6 @@ CARGO_ARGS += -vv
 endif
 
 PREFIX ?= ../bin
-APP_DATA_DIR ?= data
-APP_SEAL_DIR ?= ${APP_DATA_DIR}/protected_files
-APP_STORAGE_DIR ?= ${APP_DATA_DIR}/storage_files
 
 .PHONY: all
 all: ${BIN_NAME} ${BIN_NAME}.manifest
@@ -62,8 +59,6 @@ ${BIN_NAME}.manifest: ${BIN_NAME}.manifest.template ${LIBOS}
 		-Dra_type=${RA_TYPE} \
 		-Dra_client_spid=${RA_CLIENT_SPID} \
 		-Dra_client_linkable=${RA_CLIENT_LINKABLE} \
-		-Dseal_dir=${APP_SEAL_DIR} \
-		-Dstorage_dir=${APP_STORAGE_DIR} \
 		-Dlibdir=${RUNTIME_DIR}/lib/ \
 		-Darch_libdir=${ARCH_LIBDIR}/ \
 		-Dlibos=${LIBOS} \

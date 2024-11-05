@@ -3,6 +3,7 @@ members = [
     "justicar",
     "crates/*"
 ]
+resolver = "2"
 
 [workspace.package]
 edition = "2021"
@@ -16,7 +17,7 @@ scale = { package = "parity-scale-codec", version = "3.6.5", default-features = 
     "derive",
 ] }
 scale-info = { version = "2", default-features = false, features = ["derive"] }
-chrono = { version = "0.4.38" }
+chrono = { version = "0.4", default-features = true }
 const-oid = { version = "0.9.5", default-features = false }
 x509-cert = { version = "0.2.4", default-features = false }
 byteorder = { version = "1.5.0", default-features = false }
@@ -29,6 +30,7 @@ der = { version = "0.7.8", default-features = false, features = ["alloc"] }
 log = { version = "0.4.20", default-features = false }
 
 anyhow = { version = "1" }
+thiserror = { version = "1" }
 
 ring = { version = "0.16.20",default-features = false, features = [
     "alloc",
@@ -50,8 +52,22 @@ webpki = { git = "https://github.com/rustls/webpki", version = "=0.102.0-alpha.3
     "alloc",
     "ring",
 ], rev = "2ed9a4324f48c2c46ffdd7dc9d3eb315af25fce2" }
-
+alloy = { version = "0.5.3", features = [
+    "full",
+    "node-bindings",
+    "rpc-types-debug",
+    "rpc-types-trace",
+    "json-rpc",
+    "rpc-client",
+    "signer-aws",
+    "signer-keystore",
+    "signer-ledger",
+    "signer-mnemonic",
+    "signer-trezor",
+    "signer-yubihsm",
+    "eips",
+] }
 
 ##Local Crates
 sgx-attestation = { path = "crates/sgx-attestation" }
-ethers-contract = { path = "crates/ethers-contract" }
+contract-eth = { path = "crates/contract-eth" }

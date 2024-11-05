@@ -31,17 +31,6 @@ type = "chroot"
 path = "/etc"
 uri = "file:/etc"
 
-[[fs.mounts]]
-type = "encrypted"
-key_name = "_sgx_mrenclave"
-path = "/data/protected_files"
-uri = "file:{{ seal_dir }}"
-
-[[fs.mounts]]
-type = "chroot"
-path = "/data/storage_files"
-uri = "file:{{ storage_dir }}"
-
 [sgx]
 debug = false
 enclave_size = "2G"
@@ -63,5 +52,4 @@ allowed_files = [
   "file:/etc/hosts",
   "file:/etc/resolv.conf",
   "file:/etc/sgx_default_qcnl.conf",
-  "file:{{ storage_dir }}/",
 ]
