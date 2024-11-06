@@ -34,8 +34,12 @@ impl Contract {
         let provider =
             ProviderBuilder::new().on_anvil_with_wallet_and_config(|anvil| anvil.fork(rpc_url));
         let cdn = CDN::new(Address::from_hex(contract_addr)?, provider);
-        let a = cdn.getCurrencyTerm().call().await?._0;
-        println!("---------------------------{:?}", a);
         Ok(Self { cdn })
+    }
+
+    pub async fn get_mrenclave_list(&self) -> Result<Vec<String>> {
+        let mrenclave_list = self.cdn.getAllMREnclaveList().call().await?._0;
+
+        Ok(mrenclave_list)
     }
 }

@@ -9,3 +9,4 @@ contract-eth = { workspace = true}
 hex = { workspace = true }
 chrono = { workspace = true }
 tokio = { workspace = true}
+anyhow = { workspace = true}

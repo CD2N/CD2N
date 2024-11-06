@@ -1,9 +1,10 @@
+use anyhow::{Ok, Result};
 use contract_eth::*;
 use sgx_attestation::*;
 use std::time::Duration;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     // let data = "Test Dcap".as_bytes();
     // let pccs_url = "https://dcap-sgp-dev.cess.cloud/sgx/certification/v4/";
     // let timeout = Duration::from_secs(10);
@@ -41,13 +42,13 @@ async fn main() {
     // println!("tcb_status is :{:?}", tcb_status);
     // println!("advisory_ids is :{:?}", advisory_ids);
 
-    let _ = match contract_eth::client::Contract::get_contract_conn(
+    let contract = contract_eth::client::Contract::get_contract_conn(
         "wss://testnet-rpc.cess.cloud/ws/",
-        "fA326Ce1E9D7d291B40945B6cDdCe8e9Efea9b34".to_string(),
+        "032f2F5c1f97269eB8EFd8fB2e3B612A559754dA".to_string(),
     )
-    .await
-    {
-        Ok(contract) => contract,
-        Err(e) => panic!("connect to contract fail!because :{:?}", e),
-    };
+    .await?;
+
+    let mrenclave_list = contract.get_mrenclave_list().await?;
+    println!("mrenclave_list is :{:?}", mrenclave_list);
+    Ok(())
 }
