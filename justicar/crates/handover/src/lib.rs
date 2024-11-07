@@ -48,6 +48,12 @@ pub enum SgxError {
 
     #[error("Serde fail because: {0}")]
     SerdeError(String),
+
+    #[error("Parse fail because: {0}")]
+    ParseError(String),
+
+    #[error("Handover fail :{0}")]
+    HandoverFailed(String),
 }
 
 /// Serialize an SGX struct into a slice of bytes.
