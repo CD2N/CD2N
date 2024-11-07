@@ -1,4 +1,9 @@
-use alloy::{hex::FromHex, primitives::Address, providers::ProviderBuilder, sol};
+use alloy::{
+    hex::FromHex,
+    primitives::Address,
+    providers::{ProviderBuilder, WsConnect},
+    sol,
+};
 use anyhow::Result;
 use CDN::CDNInstance;
 sol!(
@@ -9,21 +14,8 @@ sol!(
 );
 
 pub(crate) type CDNContract = CDNInstance<
-    alloy::transports::http::Http<alloy::transports::http::Client>,
-    alloy::providers::fillers::FillProvider<
-        alloy::providers::fillers::JoinFill<
-            alloy::providers::Identity,
-            alloy::providers::fillers::WalletFiller<alloy::network::EthereumWallet>,
-        >,
-        alloy::providers::layers::AnvilProvider<
-            alloy::providers::RootProvider<
-                alloy::transports::http::Http<alloy::transports::http::Client>,
-            >,
-            alloy::transports::http::Http<alloy::transports::http::Client>,
-        >,
-        alloy::transports::http::Http<alloy::transports::http::Client>,
-        alloy::network::Ethereum,
-    >,
+    alloy::pubsub::PubSubFrontend,
+    alloy::providers::RootProvider<alloy::pubsub::PubSubFrontend>,
 >;
 pub struct Contract {
     cdn: CDNContract,
@@ -31,8 +23,10 @@ pub struct Contract {
 
 impl Contract {
     pub async fn get_contract_conn(rpc_url: &str, contract_addr: String) -> Result<Self> {
-        let provider =
-            ProviderBuilder::new().on_anvil_with_wallet_and_config(|anvil| anvil.fork(rpc_url));
+        let ws = WsConnect::new(rpc_url);
+        let provider = ProviderBuilder::new().on_ws(ws).await?;
+        // let provider =
+        //     ProviderBuilder::new().on_anvil_with_wallet_and_config(|anvil| anvil.fork(rpc_url));
         let cdn = CDN::new(Address::from_hex(contract_addr)?, provider);
         Ok(Self { cdn })
     }
