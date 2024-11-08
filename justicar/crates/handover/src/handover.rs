@@ -5,6 +5,7 @@ use anyhow::Result;
 use log::info;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+
 pub struct HandoverHandler {
     ecdh_secret_key: Option<utils::EcdhSecretKey>,
     echd_public_key: Option<utils::EcdhPublicKey>,
@@ -57,7 +58,7 @@ struct HandoverSecretData {
 }
 
 impl HandoverHandler {
-    /// [Server]1st get challenge from old
+    /// 1st step:[Server] get challenge
     fn generate_challenge(&mut self, dev_mode: bool, block_number: u64) -> HandoverChallenge {
         let sgx_target_info = if dev_mode {
             vec![]
@@ -75,7 +76,7 @@ impl HandoverHandler {
         challenge
     }
 
-    ///[this]
+    /// 2nd step:[Client] accept challenge and generate report in response
     async fn handover_accept_challenge(
         &mut self,
         challenge: HandoverChallenge,
@@ -130,7 +131,7 @@ impl HandoverHandler {
         })
     }
 
-    /// [Server]Key Handover Server: Get worker key with RA report on challenge from another Ceseal
+    /// 3rd step:[Server] Get response from client then verify it and encrypt secret data with ECDH key exchange.
     async fn handover_start(
         &mut self,
         secret_data: Vec<u8>,
@@ -187,7 +188,7 @@ impl HandoverHandler {
             //todo:return with error
             return Err(SgxError::CryptoError("The challenge is expired!".to_string()).into());
         }
-        // 5. check both side version time, never handover to old ceseal
+        // 5. check both side version time, never handover to previous version of justicar
         if !dev_mode {
             //server side
             let my_la_report = {
@@ -292,6 +293,74 @@ impl HandoverHandler {
             encrypted_data_info,
             attestation,
         })
+    }
+    /// 4th step:[Client] receieve the encrypted secret data and verify the remote attestation report from server side then decrypt it.
+    async fn handover_receive(
+        &mut self,
+        request: HandoverSecretData,
+        ra: &impl RemoteAttestation,
+        contract: &impl ExternalStatusGet,
+    ) -> Result<Vec<u8>> {
+        let encrypted_data_info = request.encrypted_data_info;
+        let server_attestation = request.attestation;
+        let dev_mode = encrypted_data_info.dev_mode;
+        // check the remote attestation report from server side
+        if !dev_mode {
+            let payload_hash = serde_json::to_vec(&encrypted_data_info)
+                .map_err(|e| SgxError::SerdeError(e.to_string()))?;
+
+            let raw_attestation = server_attestation.ok_or_else(|| {
+                SgxError::HandoverFailed("Server attestation not found".to_string())
+            })?;
+            if !ra.verify_remote_attestation_report(&payload_hash, raw_attestation.clone()) {
+                return Err(SgxError::HandoverFailed(
+                    "server remote attestation report check failed".to_string(),
+                )
+                .into());
+            };
+            let (server_mrenclave, server_mrsigner) =
+                ra.parse_mrenclave_and_mrsigner_from_attestation_report(raw_attestation)?;
+
+            let mrenclave_list = contract.get_mrenclave_list();
+            let mrsigner_list = contract.get_mrsigner_list();
+            //Check whether they are online at the same time
+            let server_load_mrenclave_block_number = mrenclave_list.get(&server_mrenclave);
+            let server_load_mrsigner_block_number = mrsigner_list.get(&server_mrsigner);
+            if !(server_load_mrenclave_block_number.is_some()
+                && server_load_mrsigner_block_number.is_some()
+                && server_load_mrenclave_block_number.eq(&server_load_mrsigner_block_number))
+            {
+                return Err(SgxError::HandoverFailed(format!(
+                    "Server load record not found,mrenclave :{:?}",
+                    &server_mrenclave
+                ))
+                .into());
+            }
+        } else {
+            info!("dev mod,server remote attestion report check skip");
+        }
+        let encrypted_data = encrypted_data_info.encrypted_data;
+        let other_ecdh_pubkey = encrypted_data_info.ecdh_pubkey;
+        let my_ecdh_secret_key = self
+            .ecdh_secret_key
+            .take()
+            .ok_or_else(|| SgxError::CryptoError("No secret key found".to_string()))?;
+        let shared_secret = utils::echd_key_agreement(
+            my_ecdh_secret_key,
+            utils::convert_bytes_to_ecdh_public_key(other_ecdh_pubkey),
+        );
+
+        let secret_data = utils::decrypt_secret_with_shared_key(
+            &encrypted_data,
+            &shared_secret,
+            &encrypted_data_info.iv,
+        )?;
+
+        self.ecdh_secret_key = None;
+        self.echd_public_key = None;
+        self.handover_last_challenge = None;
+
+        Ok(secret_data)
     }
 }
 

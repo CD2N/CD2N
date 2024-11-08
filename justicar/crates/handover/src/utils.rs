@@ -48,3 +48,17 @@ pub(crate) fn encrypt_secret_with_shared_key(
         .map_err(|e| SgxError::CryptoError(e.to_string()))?;
     Ok(ciphertext)
 }
+
+pub(crate) fn decrypt_secret_with_shared_key(
+    encrypted_data: &[u8],
+    shared_key: &SharedSecret,
+    iv: &[u8; 12],
+) -> Result<Vec<u8>> {
+    let key = Key::<Aes256Gcm>::from_slice(shared_key.as_bytes());
+    let cipher = Aes256Gcm::new(key);
+    let nonce = Nonce::from_slice(iv);
+    let plaintext = cipher
+        .decrypt(nonce, encrypted_data)
+        .map_err(|e| SgxError::CryptoError(e.to_string()))?;
+    Ok(plaintext)
+}
