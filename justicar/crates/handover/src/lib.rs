@@ -23,6 +23,7 @@
 use std::mem::{size_of, zeroed};
 
 use anyhow::Result;
+use anyhow::{anyhow, bail};
 pub use sys::sgx_report_data_t as ReportData;
 pub use sys::sgx_report_t as Report;
 pub use sys::sgx_target_info_t as TargetInfo;
@@ -35,11 +36,10 @@ mod utils;
 #[repr(C, align(512))]
 struct SgxAligned<T>(T);
 
-#[derive(Debug, Clone, Error)]
-pub enum SgxError {
-    #[error("Invalid input: {0}")]
-    InvalidInput(String),
+pub type HandoverResult<T> = std::result::Result<T, SgxError>;
 
+#[derive(Debug, Error)]
+pub enum SgxError {
     #[error("Operation failed due to internal error,because :{0}")]
     InternalError(String),
 
@@ -47,13 +47,13 @@ pub enum SgxError {
     CryptoError(String),
 
     #[error("Serde fail because: {0}")]
-    SerdeError(String),
+    SerdeError(#[from] serde_json::Error),
 
     #[error("Parse fail because: {0}")]
-    ParseError(String),
+    ParseError(#[from] std::string::FromUtf8Error),
 
     #[error("Handover fail :{0}")]
-    HandoverFailed(String),
+    HandoverFailed(#[from] anyhow::Error),
 }
 
 /// Serialize an SGX struct into a slice of bytes.
@@ -69,12 +69,11 @@ pub fn encode<T>(info: &T) -> &[u8] {
 /// is Undefined Behavior.
 pub unsafe fn decode<T>(data: &[u8]) -> Result<&T> {
     if data.len() != size_of::<T>() {
-        return Err(SgxError::InvalidInput(format!(
-            "fail decode ,because lenth error {}!= {}",
+        return Err(anyhow!(
+            "fail decode ,because lenth error {} != {}",
             data.len(),
             size_of::<T>()
-        ))
-        .into());
+        ));
     }
     Ok(&*(data as *const _ as *const T))
 }
@@ -86,7 +85,7 @@ pub fn target_info() -> Result<TargetInfo> {
         let reportdata: SgxAligned<sys::sgx_report_data_t> = zeroed();
         let mut report: SgxAligned<sys::sgx_report_t> = zeroed();
         if sys::sgx_report(&targetinfo.0, &reportdata.0, &mut report.0) != 0 {
-            return Err(SgxError::InternalError("Get target info failed".to_string()).into());
+            bail!("Get local target info failed".to_string());
         }
         let body = report.0.body;
         let my_target_info = sys::_target_info_t {
@@ -111,9 +110,7 @@ pub fn report(remote_target_info: &TargetInfo, reportdata: &ReportData) -> Resul
         let reportdata = SgxAligned(*reportdata);
         let mut report: SgxAligned<sys::sgx_report_t> = zeroed();
         if sys::sgx_report(&targetinfo.0, &reportdata.0, &mut report.0) != 0 {
-            return Err(
-                SgxError::InternalError("Get local attestation report failed".to_string()).into(),
-            );
+            bail!("Get local attestation report failed")
         }
         Ok(report.0)
     }
@@ -130,17 +127,13 @@ pub fn verify(report: &Report) -> Result<()> {
         let mut key: SgxAligned<sys::sgx_key_128bit_t> = zeroed();
 
         if sys::sgx_getkey(&mut keyrequest.0, &mut key.0) != 0 {
-            return Err(
-                SgxError::InternalError("Verify report failed when get key".to_string()).into(),
-            );
+            bail!("Verify report failed when get key")
         }
         key.0
     };
 
-    let mut cmac = Cmac::<aes::Aes128>::new_from_slice(&key[..]).or(Err(
-        SgxError::InternalError("Verify report failed when create cmac".to_string()),
-    )
-    .into())?;
+    let mut cmac = Cmac::<aes::Aes128>::new_from_slice(&key[..])
+        .or(Err(anyhow!("Verify report failed when create cmac")).into())?;
     let body = encode(&report.body);
     cmac.update(body);
 
@@ -148,6 +141,6 @@ pub fn verify(report: &Report) -> Result<()> {
     if mac[..] == report.mac[..] {
         Ok(())
     } else {
-        Err(SgxError::InternalError("Verify failed, mac not match!".to_string()).into())
+        bail!("Verify failed, mac not match!")
     }
 }

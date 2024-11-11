@@ -1,8 +1,11 @@
 use core::time::Duration;
 
+use crate::{
+    gramine::create_quote_vec,
+    types::{AttestationReport, Collateral, SgxV30QuoteCollateral},
+};
 use alloc::string::{String, ToString};
 use anyhow::{anyhow, Result};
-use crate::{types::{Collateral,SgxV30QuoteCollateral,AttestationReport},gramine::create_quote_vec};
 use scale::Decode;
 
 use super::quote::Quote;
@@ -65,7 +68,7 @@ pub async fn get_collateral(
         raw_qe_identity = response.text().await?;
     };
 
-    println!("raw_tcb_info in dcap_test :{:?}",raw_tcb_info.clone());
+    println!("raw_tcb_info in dcap_test :{:?}", raw_tcb_info.clone());
     let tcb_info_json: serde_json::Value =
         serde_json::from_str(&raw_tcb_info).map_err(|_| anyhow!("TCB Info should a JSON"))?;
     let tcb_info = tcb_info_json["tcbInfo"].to_string();
@@ -104,7 +107,7 @@ pub async fn get_collateral(
     })
 }
 
-pub fn create_attestation_report(
+pub async fn create_attestation_report(
     data: &[u8],
     pccs_url: &str,
     timeout: Duration,
@@ -113,8 +116,8 @@ pub fn create_attestation_report(
     let collateral = if pccs_url.is_empty() {
         None
     } else {
-        let collateral = tokio::runtime::Runtime::new().unwrap().block_on(async {get_collateral(pccs_url, &quote, timeout).await})?;
-        println!("collateral is :{:?}",collateral.clone());
+        let collateral = get_collateral(pccs_url, &quote, timeout).await?;
+        println!("collateral is :{:?}", collateral.clone());
         Some(Collateral::SgxV30(collateral))
     };
     Ok(AttestationReport::SgxDcap { quote, collateral })

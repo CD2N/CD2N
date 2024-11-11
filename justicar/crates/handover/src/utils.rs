@@ -1,8 +1,8 @@
+use crate::HandoverResult as Result;
 use crate::SgxError;
 use aes_gcm::aead::Aead;
 use aes_gcm::{Aes256Gcm, Nonce};
 use aes_gcm::{Key, KeyInit};
-use anyhow::Result;
 use rand::rngs::OsRng;
 use ring::rand::SecureRandom;
 use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret};

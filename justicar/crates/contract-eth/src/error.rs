@@ -1,14 +1,13 @@
+pub type ContractResult<T> = std::result::Result<T, ContractError>;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ContractError {
-    #[error("Invalid input: {0}")]
-    InvalidInput(String),
+    #[error("Connect with rpc failed: {0}")]
+    RpcError(#[from] alloy::transports::TransportError),
 
-    #[error("Operation failed due to internal error")]
-    InternalError,
+    #[error("IO Error: {0}")]
+    IoError(#[from] std::io::Error),
 
-    #[error("IO error occurred: {0}")]
-    Io(#[from] std::io::Error),
-
-    #[error("Parse error: {0}")]
-    ParseInt(#[from] std::num::ParseIntError),
+    #[error("Internal Error: {0}")]
+    InternalError(#[from] anyhow::Error),
 }

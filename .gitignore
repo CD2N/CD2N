@@ -25,4 +25,5 @@ target/
 *.manifest.sgx
 *.token
 *.manifest
+*.sig
 cruntime/

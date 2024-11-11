@@ -1,7 +1,8 @@
 use std::{collections::HashMap, fmt::format, time::Duration};
 
+use crate::HandoverResult as Result;
 use crate::{utils, SgxError};
-use anyhow::Result;
+use anyhow::{anyhow, bail};
 use log::info;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -16,6 +17,32 @@ pub struct HandoverHandler {
     pub dev_mode: bool,
     pub pccs_url: String,
     pub ra_timeout: u64,
+}
+
+impl Default for HandoverHandler {
+    fn default() -> Self {
+        HandoverHandler {
+            ecdh_secret_key: None,
+            echd_public_key: None,
+            handover_last_challenge: None,
+            dev_mode: false,
+            pccs_url: "".to_string(),
+            ra_timeout: 1800,
+        }
+    }
+}
+
+impl HandoverHandler {
+    pub fn new(dev_mode: bool, pccs_url: String, ra_timeout: u64) -> Self {
+        HandoverHandler {
+            ecdh_secret_key: None,
+            echd_public_key: None,
+            handover_last_challenge: None,
+            dev_mode,
+            pccs_url,
+            ra_timeout,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
@@ -52,32 +79,35 @@ pub struct EncryptedDataInfo {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
-struct HandoverSecretData {
+pub struct HandoverSecretData {
     encrypted_data_info: EncryptedDataInfo,
     attestation: Option<Vec<u8>>,
 }
 
 impl HandoverHandler {
     /// 1st step:[Server] get challenge
-    fn generate_challenge(&mut self, dev_mode: bool, block_number: u64) -> HandoverChallenge {
-        let sgx_target_info = if dev_mode {
+    pub fn generate_challenge(
+        &mut self,
+        contract: &impl ExternalStatusGet,
+    ) -> Result<HandoverChallenge> {
+        let sgx_target_info = if self.dev_mode {
             vec![]
         } else {
-            let my_target_info = crate::target_info().unwrap();
+            let my_target_info = crate::target_info()?;
             crate::encode(&my_target_info).to_vec()
         };
         let challenge = HandoverChallenge {
             sgx_target_info,
-            block_number,
-            dev_mode: dev_mode,
+            block_number: contract.get_block_number()?,
+            dev_mode: self.dev_mode,
             nonce: crate::utils::generate_random_byte::<32>(),
         };
         self.handover_last_challenge = Some(challenge.clone());
-        challenge
+        Ok(challenge)
     }
 
     /// 2nd step:[Client] accept challenge and generate report in response
-    async fn handover_accept_challenge(
+    pub async fn handover_accept_challenge(
         &mut self,
         challenge: HandoverChallenge,
         ra: &impl RemoteAttestation,
@@ -107,10 +137,7 @@ impl HandoverHandler {
         };
 
         let mut hasher = Sha256::new();
-        hasher.update(
-            serde_json::to_vec(&challenge_handler)
-                .map_err(|e| SgxError::SerdeError(e.to_string()))?,
-        );
+        hasher.update(serde_json::to_vec(&challenge_handler)?);
 
         let handler_hash: [u8; 32] = hasher.finalize().into();
 
@@ -132,7 +159,7 @@ impl HandoverHandler {
     }
 
     /// 3rd step:[Server] Get response from client then verify it and encrypt secret data with ECDH key exchange.
-    async fn handover_start(
+    pub async fn handover_start(
         &mut self,
         secret_data: Vec<u8>,
         response: HandoverChallengeResponse,
@@ -146,14 +173,15 @@ impl HandoverHandler {
         let challenge_handler = response.challenge_handler;
         let attestation = if !dev_mode && response.attestation.is_some() {
             let mut hasher = Sha256::new();
-            hasher.update(
-                serde_json::to_vec(&challenge_handler)
-                    .map_err(|e| SgxError::SerdeError(e.to_string()))?,
-            );
+            hasher.update(serde_json::to_vec(&challenge_handler)?);
             let payload_hash: [u8; 32] = hasher.finalize().into();
             let remote_attestation_report = response.attestation.unwrap();
             let pass = ra
                 .verify_remote_attestation_report(&payload_hash, remote_attestation_report.clone());
+            if !pass {
+                return Err(anyhow!("Verify client side remote attestation report failed!").into());
+            }
+
             remote_attestation_report
         } else {
             info!("dev mod, client remote attestion report check skip");
@@ -163,11 +191,7 @@ impl HandoverHandler {
         // 2. verify challenge validity to prevent replay attack
         let challenge = challenge_handler.challenge;
         if !(self.handover_last_challenge.take().as_ref() == Some(&challenge)) {
-            ///todo:return with error
-            return Err(SgxError::HandoverFailed(
-                "the challenge from client is invalid!".to_string(),
-            )
-            .into());
+            return Err(anyhow!("the challenge from client is invalid!").into());
         }
 
         // 3. verify sgx local attestation report to ensure the handover justicar are on the same machine
@@ -180,7 +204,7 @@ impl HandoverHandler {
 
         // 4. verify challenge block height and report timestamp
         // only challenge within 150 blocks (30 minutes) is accepted
-        let current_block_number = contract.get_block_number();
+        let current_block_number = contract.get_block_number()?;
         let challenge_height = challenge.block_number;
         if !(challenge_height <= current_block_number
             && current_block_number - challenge_height <= 150)
@@ -197,54 +221,37 @@ impl HandoverHandler {
                 crate::report(&target_info, &[0; 64])?
             };
 
-            let server_mrenclave_list = contract.get_mrenclave_list();
-            let server_mrenclave_record = server_mrenclave_list.get_key_value(
-                &String::from_utf8(my_la_report.body.mr_enclave.m.to_vec())
-                    .map_err(|e| SgxError::ParseError(e.to_string()))?,
-            );
-            let server_mrsigner_list = contract.get_mrsigner_list();
-            let server_mrsigner_record = server_mrsigner_list.get_key_value(
-                &String::from_utf8(my_la_report.body.mr_signer.m.to_vec())
-                    .map_err(|e| SgxError::ParseError(e.to_string()))?,
-            );
-            if server_mrenclave_record.is_none() || server_mrsigner_record.is_none() {
+            let server_mrenclave_list = contract.get_mrenclave_list()?;
+            let server_mrenclave_record = server_mrenclave_list
+                .get_key_value(&String::from_utf8(my_la_report.body.mr_enclave.m.to_vec())?);
+            let server_mrsigner_list = contract.get_mrsigner_list()?;
+            let server_mrsigner_record_exsist = server_mrsigner_list
+                .contains(&String::from_utf8(my_la_report.body.mr_signer.m.to_vec())?);
+            if server_mrenclave_record.is_none() || !server_mrsigner_record_exsist {
                 return Err(SgxError::InternalError(
                     "Server side justicar not allowed on contract!".to_string(),
                 )
                 .into());
             };
-            if !(server_mrenclave_record.unwrap().1 == server_mrsigner_record.unwrap().1) {
-                return Err(SgxError::InternalError(format!("Problem with the record loaded into the contract by the server side's justicar, blocknumber is different, please check the contract status! mrenclave:{:?}, mrsigner:{:?}",server_mrenclave_record.unwrap().0,server_mrsigner_record.unwrap().0) ).into());
-            }
 
             //client side
-            let (client_mrenclave, client_mrsigner) = ra
-                .parse_mrenclave_and_mrsigner_from_attestation_report(attestation)
-                .map_err(|e| {
-                    SgxError::ParseError(format!(
-                        "parse mrenclave and mrsigner from client ra report failed:{:?}",
-                        e.to_string()
-                    ))
-                })?;
+            let (client_mrenclave, client_mrsigner) =
+                ra.parse_mrenclave_and_mrsigner_from_attestation_report(attestation)?;
 
-            let client_mrenclave_list = contract.get_mrenclave_list();
+            let client_mrenclave_list = contract.get_mrenclave_list()?;
             let client_mrenclave_record = client_mrenclave_list.get_key_value(&client_mrenclave);
-            let client_mrsigner_list = contract.get_mrsigner_list();
-            let client_mrsigner_record = client_mrsigner_list.get_key_value(&client_mrsigner);
-            if client_mrenclave_record.is_none() || client_mrsigner_record.is_none() {
+            let client_mrsigner_list = contract.get_mrsigner_list()?;
+            if client_mrenclave_record.is_none() || !client_mrsigner_list.contains(&client_mrsigner)
+            {
                 return Err(SgxError::InternalError(
                     "Server side justicar not allowed on contract!".to_string(),
                 )
                 .into());
             };
-            if !(client_mrenclave_record.unwrap().1 == client_mrsigner_record.unwrap().1) {
-                return Err(SgxError::InternalError(format!("Problem with the record loaded into the contract by the client side's justicar, blocknumber is different, please check the contract! mrenclave:{:?}, mrsigner:{:?}",client_mrenclave_record.unwrap().0,client_mrsigner_record.unwrap().0) ).into());
-            }
 
             if server_mrenclave_record.unwrap().1 >= client_mrenclave_record.unwrap().1 {
-                return Err(SgxError::HandoverFailed(
+                return Err(anyhow!(
                     "The version of justicar on the server is later than that on the client"
-                        .to_string(),
                 )
                 .into());
             }
@@ -256,8 +263,7 @@ impl HandoverHandler {
         let ecdh_pubkey = challenge_handler.ecdh_pubkey;
         let iv = utils::generate_random_byte::<12>();
         let (my_ecdh_secret_key, my_echd_public_key) = utils::gen_ecdh_key_pair();
-        let client_ecdh_public_key =
-            utils::convert_bytes_to_ecdh_public_key(challenge_handler.ecdh_pubkey.clone());
+        let client_ecdh_public_key = utils::convert_bytes_to_ecdh_public_key(ecdh_pubkey);
         let shared_secret_key =
             utils::echd_key_agreement(my_ecdh_secret_key, client_ecdh_public_key);
 
@@ -265,17 +271,14 @@ impl HandoverHandler {
             utils::encrypt_secret_with_shared_key(&secret_data, &shared_secret_key, &iv)?;
 
         let encrypted_data_info = EncryptedDataInfo {
-            ecdh_pubkey,
+            ecdh_pubkey: *my_echd_public_key.as_bytes(),
             encrypted_data,
             iv,
             dev_mode,
         };
 
         let mut hasher = Sha256::new();
-        hasher.update(
-            serde_json::to_vec(&encrypted_data_info)
-                .map_err(|e| SgxError::SerdeError(e.to_string()))?,
-        );
+        hasher.update(serde_json::to_vec(&encrypted_data_info)?);
         let encrypted_data_info_hash: [u8; 32] = hasher.finalize().into();
 
         let attestation = if !dev_mode {
@@ -295,7 +298,7 @@ impl HandoverHandler {
         })
     }
     /// 4th step:[Client] receieve the encrypted secret data and verify the remote attestation report from server side then decrypt it.
-    async fn handover_receive(
+    pub async fn handover_receive(
         &mut self,
         request: HandoverSecretData,
         ra: &impl RemoteAttestation,
@@ -306,48 +309,41 @@ impl HandoverHandler {
         let dev_mode = encrypted_data_info.dev_mode;
         // check the remote attestation report from server side
         if !dev_mode {
-            let payload_hash = serde_json::to_vec(&encrypted_data_info)
-                .map_err(|e| SgxError::SerdeError(e.to_string()))?;
+            let payload_hash = serde_json::to_vec(&encrypted_data_info)?;
 
-            let raw_attestation = server_attestation.ok_or_else(|| {
-                SgxError::HandoverFailed("Server attestation not found".to_string())
-            })?;
+            let raw_attestation =
+                server_attestation.ok_or_else(|| anyhow!("Server attestation not found"))?;
             if !ra.verify_remote_attestation_report(&payload_hash, raw_attestation.clone()) {
-                return Err(SgxError::HandoverFailed(
-                    "server remote attestation report check failed".to_string(),
-                )
-                .into());
+                return Err(anyhow!("server remote attestation report check failed").into());
             };
             let (server_mrenclave, server_mrsigner) =
                 ra.parse_mrenclave_and_mrsigner_from_attestation_report(raw_attestation)?;
 
-            let mrenclave_list = contract.get_mrenclave_list();
-            let mrsigner_list = contract.get_mrsigner_list();
+            let mrenclave_list = contract.get_mrenclave_list()?;
+            let mrsigner_list = contract.get_mrsigner_list()?;
             //Check whether they are online at the same time
             let server_load_mrenclave_block_number = mrenclave_list.get(&server_mrenclave);
-            let server_load_mrsigner_block_number = mrsigner_list.get(&server_mrsigner);
-            if !(server_load_mrenclave_block_number.is_some()
-                && server_load_mrsigner_block_number.is_some()
-                && server_load_mrenclave_block_number.eq(&server_load_mrsigner_block_number))
+            if server_load_mrenclave_block_number.is_none()
+                || !mrsigner_list.contains(&server_mrsigner)
             {
-                return Err(SgxError::HandoverFailed(format!(
+                return Err(anyhow!(
                     "Server load record not found,mrenclave :{:?}",
                     &server_mrenclave
-                ))
+                )
                 .into());
             }
         } else {
             info!("dev mod,server remote attestion report check skip");
         }
         let encrypted_data = encrypted_data_info.encrypted_data;
-        let other_ecdh_pubkey = encrypted_data_info.ecdh_pubkey;
+        let server_ecdh_pubkey = encrypted_data_info.ecdh_pubkey;
         let my_ecdh_secret_key = self
             .ecdh_secret_key
             .take()
             .ok_or_else(|| SgxError::CryptoError("No secret key found".to_string()))?;
         let shared_secret = utils::echd_key_agreement(
             my_ecdh_secret_key,
-            utils::convert_bytes_to_ecdh_public_key(other_ecdh_pubkey),
+            utils::convert_bytes_to_ecdh_public_key(server_ecdh_pubkey),
         );
 
         let secret_data = utils::decrypt_secret_with_shared_key(
@@ -384,7 +380,7 @@ pub trait RemoteAttestation {
 }
 
 pub trait ExternalStatusGet {
-    fn get_block_number(&self) -> u64;
-    fn get_mrenclave_list(&self) -> HashMap<String, u64>;
-    fn get_mrsigner_list(&self) -> HashMap<String, u64>;
+    fn get_block_number(&self) -> Result<u64>;
+    fn get_mrenclave_list(&self) -> Result<HashMap<String, u64>>;
+    fn get_mrsigner_list(&self) -> Result<Vec<String>>;
 }
