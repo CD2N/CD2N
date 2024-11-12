@@ -3,16 +3,13 @@
 #[macro_use]
 extern crate alloc;
 
-use scale::{Decode, Encode};
-use scale_info::TypeInfo;
-
 pub mod dcap;
 pub mod types;
 
 #[cfg(feature = "report")]
 pub mod gramine;
 
-#[derive(Encode, Decode, TypeInfo, Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     InvalidCertificate,
     InvalidSignature,

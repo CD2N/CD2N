@@ -19,7 +19,10 @@ use {
     scale::Decode,
 };
 
-pub use crate::{dcap::quote::{AuthData, EnclaveReport, Quote},types::SgxV30QuoteCollateral};
+pub use crate::{
+    dcap::quote::{AuthData, EnclaveReport, Quote},
+    types::SgxV30QuoteCollateral,
+};
 
 #[cfg(feature = "verify")]
 #[allow(clippy::type_complexity)]
@@ -27,7 +30,7 @@ pub fn verify(
     raw_quote: &[u8],
     quote_collateral: &SgxV30QuoteCollateral,
     now: u64,
-) -> Result<([u8; 64], Vec<u8>, String, Vec<String>), Error> {
+) -> Result<([u8; 64], Vec<u8>, String, Vec<String>, [u8; 32], [u8; 32]), Error> {
     // Parse data
 
     let mut quote = raw_quote;
@@ -187,5 +190,7 @@ pub fn verify(
         tcb_hash,
         tcb_status.to_string(),
         advisory_ids,
+        quote.report.mr_enclave,
+        quote.report.mr_signer,
     ))
 }

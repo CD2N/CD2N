@@ -1,11 +1,11 @@
-use std::{collections::HashMap, fmt::format, time::Duration};
-
 use crate::HandoverResult as Result;
 use crate::{utils, SgxError};
 use anyhow::{anyhow, bail};
+use async_trait::async_trait;
 use log::info;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::{collections::HashMap, time::Duration};
 
 pub struct HandoverHandler {
     ecdh_secret_key: Option<utils::EcdhSecretKey>,
@@ -86,7 +86,7 @@ pub struct HandoverSecretData {
 
 impl HandoverHandler {
     /// 1st step:[Server] get challenge
-    pub fn generate_challenge(
+    pub async fn generate_challenge(
         &mut self,
         contract: &impl ExternalStatusGet,
     ) -> Result<HandoverChallenge> {
@@ -98,7 +98,7 @@ impl HandoverHandler {
         };
         let challenge = HandoverChallenge {
             sgx_target_info,
-            block_number: contract.get_block_number()?,
+            block_number: contract.get_block_number().await?,
             dev_mode: self.dev_mode,
             nonce: crate::utils::generate_random_byte::<32>(),
         };
@@ -142,11 +142,14 @@ impl HandoverHandler {
         let handler_hash: [u8; 32] = hasher.finalize().into();
 
         let attestation = if !dev_mode {
-            Some(ra.create_remote_attestation_report(
-                &handler_hash,
-                &self.pccs_url,
-                Duration::from_secs(self.ra_timeout),
-            ))
+            Some(
+                ra.create_remote_attestation_report(
+                    &handler_hash,
+                    &self.pccs_url,
+                    Duration::from_secs(self.ra_timeout),
+                )
+                .await?,
+            )
         } else {
             info!("dev mode does not need remote attestation");
             None
@@ -171,21 +174,23 @@ impl HandoverHandler {
         // 1. verify client RA report to ensure it's in sgx
         // this also ensure the message integrity
         let challenge_handler = response.challenge_handler;
-        let attestation = if !dev_mode && response.attestation.is_some() {
+        let (client_mrenclave, client_mrsigner) = if !dev_mode && response.attestation.is_some() {
             let mut hasher = Sha256::new();
             hasher.update(serde_json::to_vec(&challenge_handler)?);
             let payload_hash: [u8; 32] = hasher.finalize().into();
             let remote_attestation_report = response.attestation.unwrap();
-            let pass = ra
-                .verify_remote_attestation_report(&payload_hash, remote_attestation_report.clone());
+            let (pass, client_mrenclave, client_mrsigner) = ra.verify_remote_attestation_report(
+                &payload_hash,
+                remote_attestation_report.clone(),
+            )?;
             if !pass {
                 return Err(anyhow!("Verify client side remote attestation report failed!").into());
             }
 
-            remote_attestation_report
+            (client_mrenclave, client_mrsigner)
         } else {
             info!("dev mod, client remote attestion report check skip");
-            vec![]
+            ("".to_string(), "".to_string())
         };
 
         // 2. verify challenge validity to prevent replay attack
@@ -204,7 +209,7 @@ impl HandoverHandler {
 
         // 4. verify challenge block height and report timestamp
         // only challenge within 150 blocks (30 minutes) is accepted
-        let current_block_number = contract.get_block_number()?;
+        let current_block_number = contract.get_block_number().await?;
         let challenge_height = challenge.block_number;
         if !(challenge_height <= current_block_number
             && current_block_number - challenge_height <= 150)
@@ -221,10 +226,10 @@ impl HandoverHandler {
                 crate::report(&target_info, &[0; 64])?
             };
 
-            let server_mrenclave_list = contract.get_mrenclave_list()?;
+            let server_mrenclave_list = contract.get_mrenclave_update_block_number_map().await?;
             let server_mrenclave_record = server_mrenclave_list
                 .get_key_value(&String::from_utf8(my_la_report.body.mr_enclave.m.to_vec())?);
-            let server_mrsigner_list = contract.get_mrsigner_list()?;
+            let server_mrsigner_list = contract.get_mrsigner_list().await?;
             let server_mrsigner_record_exsist = server_mrsigner_list
                 .contains(&String::from_utf8(my_la_report.body.mr_signer.m.to_vec())?);
             if server_mrenclave_record.is_none() || !server_mrsigner_record_exsist {
@@ -235,12 +240,10 @@ impl HandoverHandler {
             };
 
             //client side
-            let (client_mrenclave, client_mrsigner) =
-                ra.parse_mrenclave_and_mrsigner_from_attestation_report(attestation)?;
 
-            let client_mrenclave_list = contract.get_mrenclave_list()?;
+            let client_mrenclave_list = contract.get_mrenclave_update_block_number_map().await?;
             let client_mrenclave_record = client_mrenclave_list.get_key_value(&client_mrenclave);
-            let client_mrsigner_list = contract.get_mrsigner_list()?;
+            let client_mrsigner_list = contract.get_mrsigner_list().await?;
             if client_mrenclave_record.is_none() || !client_mrsigner_list.contains(&client_mrsigner)
             {
                 return Err(SgxError::InternalError(
@@ -282,11 +285,14 @@ impl HandoverHandler {
         let encrypted_data_info_hash: [u8; 32] = hasher.finalize().into();
 
         let attestation = if !dev_mode {
-            Some(ra.create_remote_attestation_report(
-                &encrypted_data_info_hash,
-                &self.pccs_url,
-                Duration::from_secs(self.ra_timeout),
-            ))
+            Some(
+                ra.create_remote_attestation_report(
+                    &encrypted_data_info_hash,
+                    &self.pccs_url,
+                    Duration::from_secs(self.ra_timeout),
+                )
+                .await?,
+            )
         } else {
             info!("dev mod ,server remote attestion report check skip");
             None
@@ -313,14 +319,14 @@ impl HandoverHandler {
 
             let raw_attestation =
                 server_attestation.ok_or_else(|| anyhow!("Server attestation not found"))?;
-            if !ra.verify_remote_attestation_report(&payload_hash, raw_attestation.clone()) {
+            let (pass, server_mrenclave, server_mrsigner) =
+                ra.verify_remote_attestation_report(&payload_hash, raw_attestation.clone())?;
+            if !pass {
                 return Err(anyhow!("server remote attestation report check failed").into());
             };
-            let (server_mrenclave, server_mrsigner) =
-                ra.parse_mrenclave_and_mrsigner_from_attestation_report(raw_attestation)?;
 
-            let mrenclave_list = contract.get_mrenclave_list()?;
-            let mrsigner_list = contract.get_mrsigner_list()?;
+            let mrenclave_list = contract.get_mrenclave_update_block_number_map().await?;
+            let mrsigner_list = contract.get_mrsigner_list().await?;
             //Check whether they are online at the same time
             let server_load_mrenclave_block_number = mrenclave_list.get(&server_mrenclave);
             if server_load_mrenclave_block_number.is_none()
@@ -360,27 +366,26 @@ impl HandoverHandler {
     }
 }
 
+#[async_trait]
 pub trait RemoteAttestation {
-    fn create_remote_attestation_report(
+    async fn create_remote_attestation_report(
         &self,
         payload: &[u8],
         pccs_url: &str,
         ra_timeout: Duration,
-    ) -> Vec<u8>;
+    ) -> Result<Vec<u8>>;
 
     ///Only verify the legitimacy of the report and do not make any business judgments.
     ///Of course, you can do so if you want.
-    fn verify_remote_attestation_report(&self, payload: &[u8], attestation_report: Vec<u8>)
-        -> bool;
-
-    fn parse_mrenclave_and_mrsigner_from_attestation_report(
+    fn verify_remote_attestation_report(
         &self,
+        payload: &[u8],
         attestation_report: Vec<u8>,
-    ) -> Result<(String, String)>;
+    ) -> Result<(bool, String, String)>;
 }
-
+#[async_trait]
 pub trait ExternalStatusGet {
-    fn get_block_number(&self) -> Result<u64>;
-    fn get_mrenclave_list(&self) -> Result<HashMap<String, u64>>;
-    fn get_mrsigner_list(&self) -> Result<Vec<String>>;
+    async fn get_block_number(&self) -> Result<u64>;
+    async fn get_mrenclave_update_block_number_map(&self) -> Result<HashMap<String, u128>>;
+    async fn get_mrsigner_list(&self) -> Result<Vec<String>>;
 }

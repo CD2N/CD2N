@@ -18,6 +18,7 @@ pub(crate) type CDNContract = CDNInstance<
     alloy::pubsub::PubSubFrontend,
     alloy::providers::RootProvider<alloy::pubsub::PubSubFrontend>,
 >;
+#[derive(Clone)]
 pub struct Contract {
     cdn: CDNContract,
 }
@@ -46,9 +47,38 @@ impl Contract {
             .getAllMREnclaveList()
             .call()
             .await
-            .context("Get MrEnclave list failed")?
+            .context("Get MrEnclaveList from contract failed")?
             ._0;
 
         Ok(mrenclave_list)
+    }
+
+    pub async fn get_mrsigner_list(&self) -> Result<Vec<String>> {
+        let mrsigner_list = self
+            .cdn
+            .getAllMRSignerList()
+            .call()
+            .await
+            .context("Get MRSignerList from contract failed")?
+            ._0;
+
+        Ok(mrsigner_list)
+    }
+
+    pub async fn get_update_block_number(&self) -> Result<Vec<u128>> {
+        let update_block_number = self
+            .cdn
+            .getAllUpdateBlockNumber()
+            .call()
+            .await
+            .context("Get UpdateBlockNumber vec from contract failed")?
+            ._0;
+
+        let mut update_block_number_list = Vec::new();
+        for i in 0..update_block_number.len() {
+            update_block_number_list.push(update_block_number[i].to::<u128>());
+        }
+
+        Ok(update_block_number_list)
     }
 }

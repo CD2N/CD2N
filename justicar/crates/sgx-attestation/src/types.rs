@@ -1,21 +1,20 @@
 use alloc::string::String;
 use alloc::vec::Vec;
-use scale::{Decode, Encode};
-use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
 
-#[derive(Encode, Decode, TypeInfo, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AttestationType {
     Epid,
     Dcap,
 }
 
-#[derive(Encode, Decode, TypeInfo, Debug, Clone, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub struct SgxQuote {
     pub attestation_type: AttestationType,
     pub quote: Vec<u8>,
 }
 
-#[derive(Encode, Decode, TypeInfo, Debug, Clone, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub enum AttestationReport {
     SgxIas {
         ra_report: Vec<u8>,
@@ -28,12 +27,12 @@ pub enum AttestationReport {
     },
 }
 
-#[derive(Encode, Decode, TypeInfo, Debug, Clone, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq)]
 pub enum Collateral {
     SgxV30(SgxV30QuoteCollateral),
 }
 
-#[derive(Encode, Decode, TypeInfo, Clone, PartialEq, Eq, Debug)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Debug)]
 pub struct SgxV30QuoteCollateral {
     pub pck_crl_issuer_chain: String,
     pub root_ca_crl: String,

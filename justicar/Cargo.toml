@@ -49,6 +49,7 @@ tokio ={ version = "1.38.0" }
 rand = "0.8.4"
 sha2 = "0.10.8"
 axum = "0.7"
+async-trait = "0.1"
 
 webpki = { git = "https://github.com/rustls/webpki", version = "=0.102.0-alpha.3", package = "rustls-webpki", default-features = false, features = [
     "alloc",

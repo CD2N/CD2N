@@ -1,16 +1,19 @@
+use std::sync::Arc;
+
 use contract_eth::client::Contract;
 use handover::handover::HandoverHandler;
+use tokio::sync::Mutex;
 
 pub struct Args {}
 
+#[derive(Clone)]
 pub struct CD2NState {
-    pub handover_handler: HandoverHandler,
-    pub contract: Contract,
+    pub handover_handler: Arc<Mutex<HandoverHandler>>,
+    pub contract: Arc<Contract>,
+    pub wallet_sk: Vec<u8>,
 }
 
-pub struct ContractClient {
-    pub contract: Contract,
-}
+pub struct RA;
 
 impl CD2NState {
     pub async fn new(
@@ -21,10 +24,15 @@ impl CD2NState {
         contract_addr: String,
     ) -> Self {
         CD2NState {
-            handover_handler: HandoverHandler::new(dev_mode, pccs_url, ra_timeout),
-            contract: Contract::get_contract_conn(&rpc_url, contract_addr)
-                .await
-                .unwrap(),
+            handover_handler: Arc::new(Mutex::new(HandoverHandler::new(
+                dev_mode, pccs_url, ra_timeout,
+            ))),
+            contract: Arc::new(
+                Contract::get_contract_conn(&rpc_url, contract_addr)
+                    .await
+                    .unwrap(),
+            ),
+            wallet_sk: [6_u8; 32].to_vec(),
         }
     }
 }

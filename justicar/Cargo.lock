@@ -2232,6 +2232,7 @@ dependencies = [
  "aes",
  "aes-gcm",
  "anyhow",
+ "async-trait",
  "cmac",
  "log",
  "rand",
@@ -2826,11 +2827,13 @@ name = "justicar"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "chrono",
  "contract-eth",
  "handover",
  "hex",
+ "serde_json",
  "sgx-attestation",
  "tokio",
 ]
