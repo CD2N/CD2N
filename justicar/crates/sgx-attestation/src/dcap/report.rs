@@ -68,7 +68,6 @@ pub async fn get_collateral(
         raw_qe_identity = response.text().await?;
     };
 
-    println!("raw_tcb_info in dcap_test :{:?}", raw_tcb_info.clone());
     let tcb_info_json: serde_json::Value =
         serde_json::from_str(&raw_tcb_info).map_err(|_| anyhow!("TCB Info should a JSON"))?;
     let tcb_info = tcb_info_json["tcbInfo"].to_string();
@@ -117,7 +116,7 @@ pub async fn create_attestation_report(
         None
     } else {
         let collateral = get_collateral(pccs_url, &quote, timeout).await?;
-        println!("collateral is :{:?}", collateral.clone());
+
         Some(Collateral::SgxV30(collateral))
     };
     Ok(AttestationReport::SgxDcap { quote, collateral })
