@@ -3,7 +3,8 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use handover::handover::{
-    ExternalStatusGet, HandoverChallenge, HandoverChallengeResponse, RemoteAttestation,
+    ExternalStatusGet, HandoverChallenge, HandoverChallengeResponse, HandoverSecretData,
+    RemoteAttestation,
 };
 use sgx_attestation::{
     dcap::{self, report, Quote},
@@ -101,8 +102,9 @@ impl RemoteAttestation for RA {
         let mut pad_payload = [0u8; 64];
         pad_payload[..payload.len()].copy_from_slice(payload);
 
-        let mr_enclave = String::from_utf8(mr_enclave.to_vec())?;
-        let mr_signer = String::from_utf8(mr_signer.to_vec())?;
+        let mr_enclave = hex::encode_upper(mr_enclave);
+        let mr_signer = hex::encode_upper(mr_signer);
+
         if report_data != pad_payload {
             Ok((false, mr_enclave, mr_signer))
         } else {
@@ -120,7 +122,7 @@ pub async fn generate_challenge(State(state): State<CD2NState>) -> impl IntoResp
         .generate_challenge(&state.clone())
         .await
         .unwrap();
-    (StatusCode::CREATED, Json(challenge))
+    (StatusCode::OK, Json(challenge))
 }
 
 pub async fn handover_accept_challenge(
@@ -137,7 +139,7 @@ pub async fn handover_accept_challenge(
         .await
         .unwrap();
 
-    (StatusCode::CREATED, Json(handover_challenge_response))
+    (StatusCode::OK, Json(handover_challenge_response))
 }
 
 pub async fn handover_start(
@@ -154,5 +156,22 @@ pub async fn handover_start(
         .await
         .unwrap();
 
-    (StatusCode::CREATED, Json(handover_secret_data))
+    (StatusCode::OK, Json(handover_secret_data))
+}
+
+pub async fn handover_receive(
+    State(state): State<CD2NState>,
+    Json(params): Json<HandoverSecretData>,
+) -> impl IntoResponse {
+    let ra = RA {};
+    let handover_secret_data = state
+        .handover_handler
+        .clone()
+        .lock()
+        .await
+        .handover_receive(params, &ra, &state)
+        .await
+        .unwrap();
+
+    StatusCode::OK
 }

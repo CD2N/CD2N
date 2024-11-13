@@ -2234,6 +2234,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "cmac",
+ "hex",
  "log",
  "rand",
  "ring 0.16.20",

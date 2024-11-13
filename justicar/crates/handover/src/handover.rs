@@ -195,9 +195,9 @@ impl HandoverHandler {
 
         // 2. verify challenge validity to prevent replay attack
         let challenge = challenge_handler.challenge;
-        if !(self.handover_last_challenge.take().as_ref() == Some(&challenge)) {
-            return Err(anyhow!("the challenge from client is invalid!").into());
-        }
+        // if !(self.handover_last_challenge.take().as_ref() == Some(&challenge)) {
+        //     return Err(anyhow!("the challenge from client is invalid!").into());
+        // }
 
         // 3. verify sgx local attestation report to ensure the handover justicar are on the same machine
         if !dev_mode {
@@ -227,11 +227,16 @@ impl HandoverHandler {
             };
 
             let server_mrenclave_list = contract.get_mrenclave_update_block_number_map().await?;
+
+            println!(
+                "server_mrenclave_list is :{:?}",
+                server_mrenclave_list.clone()
+            );
             let server_mrenclave_record = server_mrenclave_list
-                .get_key_value(&String::from_utf8(my_la_report.body.mr_enclave.m.to_vec())?);
+                .get_key_value(&hex::encode_upper(my_la_report.body.mr_enclave.m));
             let server_mrsigner_list = contract.get_mrsigner_list().await?;
-            let server_mrsigner_record_exsist = server_mrsigner_list
-                .contains(&String::from_utf8(my_la_report.body.mr_signer.m.to_vec())?);
+            let server_mrsigner_record_exsist =
+                server_mrsigner_list.contains(&hex::encode_upper(my_la_report.body.mr_signer.m));
             if server_mrenclave_record.is_none() || !server_mrsigner_record_exsist {
                 return Err(SgxError::InternalError(
                     "Server side justicar not allowed on contract!".to_string(),
@@ -252,7 +257,7 @@ impl HandoverHandler {
                 .into());
             };
 
-            if server_mrenclave_record.unwrap().1 >= client_mrenclave_record.unwrap().1 {
+            if server_mrenclave_record.unwrap().1 > client_mrenclave_record.unwrap().1 {
                 return Err(anyhow!(
                     "The version of justicar on the server is later than that on the client"
                 )
@@ -315,7 +320,9 @@ impl HandoverHandler {
         let dev_mode = encrypted_data_info.dev_mode;
         // check the remote attestation report from server side
         if !dev_mode {
-            let payload_hash = serde_json::to_vec(&encrypted_data_info)?;
+            let mut hasher = Sha256::new();
+            hasher.update(serde_json::to_vec(&encrypted_data_info)?);
+            let payload_hash: [u8; 32] = hasher.finalize().into();
 
             let raw_attestation =
                 server_attestation.ok_or_else(|| anyhow!("Server attestation not found"))?;

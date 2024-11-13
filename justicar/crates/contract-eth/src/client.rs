@@ -2,7 +2,7 @@ use crate::error::ContractResult as Result;
 use alloy::{
     hex::FromHex,
     primitives::Address,
-    providers::{ProviderBuilder, WsConnect},
+    providers::{Provider, ProviderBuilder, WsConnect},
     sol,
 };
 use anyhow::{anyhow, Context};
@@ -38,7 +38,12 @@ impl Contract {
     }
 
     pub async fn get_current_block_number(&self) -> Result<u64> {
-        Ok(0)
+        Ok(self
+            .cdn
+            .provider()
+            .get_block_number()
+            .await
+            .context("Get block chain current block number failed")?)
     }
 
     pub async fn get_mrenclave_list(&self) -> Result<Vec<String>> {
