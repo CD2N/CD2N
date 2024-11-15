@@ -1,5 +1,5 @@
 [package]
-name = "contract-eth"
+name = "eth"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,3 +10,11 @@ alloy={workspace = true}
 tokio = {workspace = true }
 anyhow = { workspace = true}
 thiserror={workspace = true}
+async-trait = {workspace = true}
+
+
+[features]
+default = ["contract-interact","balance"]
+
+contract-interact = []
+balance = []

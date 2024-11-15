@@ -1,7 +1,7 @@
-pub type ContractResult<T> = std::result::Result<T, ContractError>;
+pub type ContractResult<T> = std::result::Result<T, EthError>;
 
 #[derive(Debug, thiserror::Error)]
-pub enum ContractError {
+pub enum EthError {
     #[error("Connect with rpc failed: {0}")]
     RpcError(#[from] alloy::transports::TransportError),
 

@@ -1,7 +1,8 @@
-use crate::models::{CD2NState, RA};
+use crate::models::{CD2NState, Wallet, RA};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
+use eth::interact_contract::ContractInteract;
 use handover::handover::{
     ExternalStatusGet, HandoverChallenge, HandoverChallengeResponse, HandoverSecretData,
     RemoteAttestation,
@@ -147,12 +148,15 @@ pub async fn handover_start(
     Json(params): Json<HandoverChallengeResponse>,
 ) -> impl IntoResponse {
     let ra = RA {};
+    let secret = state.wallet.clone().lock().await.to_owned();
+
+    let secret_data = serde_json::to_vec(&secret).unwrap();
     let handover_secret_data = state
         .handover_handler
         .clone()
         .lock()
         .await
-        .handover_start(state.wallet_sk.clone(), params, &ra, &state)
+        .handover_start(secret_data, params, &ra, &state)
         .await
         .unwrap();
 
@@ -173,5 +177,8 @@ pub async fn handover_receive(
         .await
         .unwrap();
 
+    let wallet: Wallet = serde_json::from_slice(&handover_secret_data).unwrap();
+
+    *state.wallet.clone().lock().await = wallet;
     StatusCode::OK
 }
