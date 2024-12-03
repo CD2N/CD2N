@@ -8,10 +8,18 @@ use async_trait::async_trait;
 #[cfg(feature = "contract-interact")]
 #[async_trait]
 pub trait ContractInteract {
+    //For internal operate
     async fn get_current_block_number(&self) -> Result<u64>;
     async fn get_mrenclave_list(&self) -> Result<Vec<String>>;
     async fn get_mrsigner_list(&self) -> Result<Vec<String>>;
     async fn get_update_block_number(&self) -> Result<Vec<u128>>;
+
+    //For business
+    async fn get_user_download_capacity(
+        &self,
+        cdn_wallet_address: &str,
+        wallet_address: &str,
+    ) -> Result<i64>;
 }
 
 #[cfg(feature = "contract-interact")]
@@ -70,5 +78,16 @@ impl ContractInteract for Eth {
         }
 
         Ok(update_block_number_list)
+    }
+
+    //Get user download capacity by user eth wallet address
+    async fn get_user_download_capacity(
+        &self,
+        _cdn_wallet_address: &str,
+        _wallet_address: &str,
+    ) -> Result<i64> {
+        //todo
+
+        Ok(1000)
     }
 }

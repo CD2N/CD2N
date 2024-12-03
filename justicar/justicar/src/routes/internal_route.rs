@@ -1,9 +1,4 @@
-use crate::handlers::internal_handler;
-use crate::models::CD2NState;
-use axum::{
-    routing::{get, post},
-    Router,
-};
+use super::*;
 
 pub async fn handover_routes(state: CD2NState) -> Router {
     Router::new()

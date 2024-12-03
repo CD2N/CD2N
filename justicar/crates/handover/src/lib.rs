@@ -31,7 +31,7 @@ use thiserror::Error;
 
 pub mod handover;
 mod sys;
-mod utils;
+pub mod utils;
 
 #[repr(C, align(512))]
 struct SgxAligned<T>(T);

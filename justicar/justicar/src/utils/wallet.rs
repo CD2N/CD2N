@@ -1,7 +1,10 @@
 use crate::models::Wallet;
-use anyhow::{Context, Result};
+use aes_gcm::aead::Aead;
+use aes_gcm::{Aes256Gcm, Nonce};
+use aes_gcm::{Key, KeyInit};
+use anyhow::{anyhow, Context, Result};
 use bip39::{Language, Mnemonic};
-use secp256k1::{Secp256k1, SecretKey};
+use secp256k1::{PublicKey, Secp256k1, SecretKey};
 
 use alloy::signers::local::{coins_bip39::English, MnemonicBuilder};
 pub fn generate_new_wallet() -> Result<Wallet> {
@@ -28,6 +31,34 @@ pub fn generate_new_wallet() -> Result<Wallet> {
         mnemonic: mnemonic_phrase,
         eth_public_address: wallet.address().to_string(),
     })
+}
+
+impl Wallet {
+    pub fn ecdh_agreement(&self, other_public_key: [u8; 32]) -> Result<[u8; 32]> {
+        let secret_data = secp256k1::ecdh::SharedSecret::new(
+            &PublicKey::from_slice(&other_public_key).context("Invalid other's public key")?,
+            &SecretKey::from_slice(&self.private_key).context("Invalid my secret key")?,
+        );
+        Ok(secret_data.secret_bytes())
+    }
+
+    pub fn decrypt_data_with_secret_and_nonce(
+        &self,
+        encrypted_data: &[u8],
+        secret_data: [u8; 32],
+        iv: &[u8; 12],
+    ) -> Result<Vec<u8>> {
+        let key = Key::<Aes256Gcm>::from_slice(&secret_data);
+        let cipher = Aes256Gcm::new(key);
+        let nonce = Nonce::from_slice(iv);
+        let plaintext = cipher.decrypt(nonce, encrypted_data).map_err(|e| {
+            anyhow!(
+                "Failed to decrypt data from provider because: {:?}",
+                e.to_string()
+            )
+        })?;
+        Ok(plaintext)
+    }
 }
 
 #[cfg(test)]
