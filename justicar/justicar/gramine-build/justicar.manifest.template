@@ -1,0 +1,55 @@
+[libos]
+entrypoint = "justicar"
+
+[loader]
+entrypoint = "file:{{ libos }}"
+log_level = "{{ log_level }}"
+insecure__use_cmdline_argv = true
+
+[sys]
+insecure__allow_eventfd = true
+
+[loader.env]
+LD_LIBRARY_PATH = "{{ libdir }}:{{ arch_libdir }}"
+MALLOC_ARENA_MAX = "1"
+RUST_LOG = { passthrough = true }
+all_proxy = { passthrough = true }
+i2p_proxy = { passthrough = true }
+
+[[fs.mounts]]
+type = "chroot"
+path = "/lib"
+uri = "file:{{ libdir }}"
+
+[[fs.mounts]]
+type = "chroot"
+path = "/lib/x86_64-linux-gnu"
+uri = "file:{{ arch_libdir }}"
+
+[[fs.mounts]]
+type = "chroot"
+path = "/etc"
+uri = "file:/etc"
+
+[sgx]
+debug = false
+enclave_size = "2G"
+max_threads = 128
+remote_attestation = "{{ ra_type }}"
+{% if ra_type == "epid" %}
+ra_client_spid = "{{ ra_client_spid }}"
+ra_client_linkable = {{ 'true' if ra_client_linkable == '1' else 'false' }}
+{% endif %}
+
+trusted_files = [
+  "file:{{ libos }}",
+  "file:{{ libdir }}",
+  "file:{{ arch_libdir }}",
+  "file:justicar",
+]
+
+allowed_files = [
+  "file:/etc/hosts",
+  "file:/etc/resolv.conf",
+  "file:/etc/sgx_default_qcnl.conf",
+]
