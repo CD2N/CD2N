@@ -15,11 +15,7 @@ pub trait ContractInteract {
     async fn get_update_block_number(&self) -> Result<Vec<u128>>;
 
     //For business
-    async fn get_user_download_capacity(
-        &self,
-        cdn_wallet_address: &str,
-        wallet_address: &str,
-    ) -> Result<i64>;
+    async fn get_user_order(&self, cdn_wallet_address: &str, wallet_address: &str) -> Result<i64>;
 }
 
 #[cfg(feature = "contract-interact")]
@@ -81,13 +77,13 @@ impl ContractInteract for Eth {
     }
 
     //Get user download capacity by user eth wallet address
-    async fn get_user_download_capacity(
+    async fn get_user_order(
         &self,
         _cdn_wallet_address: &str,
         _wallet_address: &str,
     ) -> Result<i64> {
         //todo
 
-        Ok(1000)
+        Ok(1073741824)
     }
 }

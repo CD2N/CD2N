@@ -1,12 +1,8 @@
 use anyhow::Result;
-use eth::*;
-use sgx_attestation::*;
-use std::{sync::Arc, time::Duration};
 mod handlers;
 mod models;
 mod routes;
 mod utils;
-use axum::{response::Html, routing::get, Router};
 use clap::Parser;
 use models::args::Args;
 
@@ -22,6 +18,7 @@ async fn main() -> Result<()> {
         args.ra_timeout,
         args.chain_rpc,
         args.redis_url,
+        args.safe_storage_path,
         CONTRACT_ADDRESS.to_string(),
     )
     .await?;

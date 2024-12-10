@@ -9,6 +9,6 @@ use axum::{
 
 pub async fn create_routes(state: CD2NState) -> Router {
     Router::new()
-        .merge(internal_route::handover_routes(state.clone()).await)
         .merge(service_route::service_routes(state.clone()).await)
+        .merge(internal_route::handover_routes(state.clone()).await)
 }

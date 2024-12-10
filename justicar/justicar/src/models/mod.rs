@@ -1,6 +1,6 @@
 pub(crate) mod args;
 pub(crate) mod service;
-use crate::utils::wallet::generate_new_wallet;
+use crate::utils::{bloom::Bloom, wallet::generate_new_wallet};
 use anyhow::Result;
 use db::client::RedisConn;
 use eth::client::Eth;
@@ -15,6 +15,8 @@ pub struct CD2NState {
     pub contract: Arc<Eth>,
     pub redis_conn: Arc<Mutex<RedisConn>>,
     pub wallet: Arc<Mutex<Wallet>>,
+    pub bloom: Arc<Mutex<Bloom>>,
+    pub safe_storage_path: Arc<Mutex<String>>,
 }
 
 pub struct RA;
@@ -34,6 +36,7 @@ impl CD2NState {
         ra_timeout: u64,
         rpc_url: String,
         redis_url: String,
+        safe_storage_path: String,
         contract_addr: String,
     ) -> Result<Self> {
         Ok(CD2NState {
@@ -43,6 +46,8 @@ impl CD2NState {
             contract: Arc::new(Eth::get_contract_conn(&rpc_url, contract_addr).await?),
             redis_conn: Arc::new(Mutex::new(RedisConn::create_connection(&redis_url).await?)),
             wallet: Arc::new(Mutex::new(generate_new_wallet()?)),
+            bloom: Arc::new(Mutex::new(Bloom::create_bloom_filter(0.01, 100_000_000))),
+            safe_storage_path: Arc::new(Mutex::new(safe_storage_path)),
         })
     }
 }
