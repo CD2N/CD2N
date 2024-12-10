@@ -27,3 +27,4 @@ target/
 *.manifest
 *.sig
 cruntime/
+justicar/scripts/redis/data
