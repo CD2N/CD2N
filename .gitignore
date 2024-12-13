@@ -33,3 +33,5 @@ keyring.json
 artifacts
 
 node_modules
+
+justicar/scripts/redis/data

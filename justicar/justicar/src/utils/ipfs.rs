@@ -1,4 +1,4 @@
-use anyhow::{Context, Ok, Result};
+use anyhow::{Context, Result};
 use ipfs_cid::generate_cid_v0;
 
 pub fn compute_ipfs_cid_from_bytes(data: Vec<u8>) -> Result<String> {

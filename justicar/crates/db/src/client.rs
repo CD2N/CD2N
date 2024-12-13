@@ -14,9 +14,9 @@ impl RedisConn {
         // connect to redis
         let client = redis::Client::open(url)?;
         let config = ConnectionManagerConfig::new();
-        let coon = client.get_connection_manager_with_config(config).await?;
+        let conn = client.get_connection_manager_with_config(config).await?;
 
-        Ok(Self { conn: coon })
+        Ok(Self { conn })
     }
 
     pub async fn get_data(&mut self, key: &str) -> Result<Option<String>> {
