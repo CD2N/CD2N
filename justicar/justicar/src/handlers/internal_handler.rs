@@ -148,7 +148,7 @@ pub async fn handover_start(
     Json(params): Json<HandoverChallengeResponse>,
 ) -> impl IntoResponse {
     let ra = RA {};
-    let secret = state.wallet.clone().lock().await.to_owned();
+    let secret = state.wallet.clone();
 
     let secret_data = serde_json::to_vec(&secret).unwrap();
     let handover_secret_data = state
@@ -164,7 +164,7 @@ pub async fn handover_start(
 }
 
 pub async fn handover_receive(
-    State(state): State<CD2NState>,
+    State(mut state): State<CD2NState>,
     Json(params): Json<HandoverSecretData>,
 ) -> impl IntoResponse {
     let ra = RA {};
@@ -179,6 +179,6 @@ pub async fn handover_receive(
 
     let wallet: Wallet = serde_json::from_slice(&handover_secret_data).unwrap();
 
-    *state.wallet.clone().lock().await = wallet;
+    state.wallet = wallet;
     StatusCode::OK
 }

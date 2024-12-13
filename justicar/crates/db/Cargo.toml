@@ -9,4 +9,4 @@ redis = { workspace = true, features = [
     "tokio-comp",
     "aio",
 ] }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["full"] }

@@ -1,6 +1,6 @@
 SGX_SIGNER_KEY ?= ./enclave-key.pem
 SGX ?= 1
-RA_TYPE ?= dcap
+RA_TYPE = dcap
 
 ARCH_LIBDIR ?= /lib/$(shell $(CC) -dumpmachine)
 
@@ -12,8 +12,7 @@ USE_MUSL ?= 0
 
 BIN_NAME = justicar
 
-DATA_DIRS = data/protected_files \
-            data/storage_files
+DATA_DIRS = data/reward_record
 
 GRAMINE_DIR ?= $(shell ./gramine-dir libs)
 GRAMINE_LIBOS ?= $(shell ./gramine-dir libos)
@@ -57,8 +56,7 @@ ${BIN_NAME}.manifest: ${BIN_NAME}.manifest.template ${LIBOS}
 		-Dinstall_dir=$(INSTALL_DIR) \
 		-Dlog_level=$(GRAMINE_LOG_LEVEL) \
 		-Dra_type=${RA_TYPE} \
-		-Dra_client_spid=${RA_CLIENT_SPID} \
-		-Dra_client_linkable=${RA_CLIENT_LINKABLE} \
+		-Dseal_dir=${DATA_DIRS} \
 		-Dlibdir=${RUNTIME_DIR}/lib/ \
 		-Darch_libdir=${ARCH_LIBDIR}/ \
 		-Dlibos=${LIBOS} \
