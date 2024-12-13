@@ -16,6 +16,7 @@ pub trait ContractInteract {
 
     //For business
     async fn get_user_order(&self, cdn_wallet_address: &str, wallet_address: &str) -> Result<i64>;
+    async fn incentive_release() -> Result<()>;
 }
 
 #[cfg(feature = "contract-interact")]
@@ -85,5 +86,9 @@ impl ContractInteract for Eth {
         //todo
 
         Ok(1073741824)
+    }
+
+    async fn incentive_release() -> Result<()> {
+        Ok(())
     }
 }

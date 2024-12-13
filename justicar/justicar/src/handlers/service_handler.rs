@@ -1,10 +1,10 @@
 use super::*;
 use crate::{
     models::service::{
-        RewardDatabase, SupplierDataAuditRequest, SupplierDataAuditResponse, TestEcho,
-        TestEchoResponse, UserReward,
+        QueryDownloadCapacity, QueryDownloadCapacityResponse, QueryInformationResponse,
+        RewardDatabase, SupplierDataAuditResponse, SupplierReward, TestEcho, TestEchoResponse,
     },
-    utils::seal::{Sealing, REWARD_RECORD_FILE},
+    utils::seal::Sealing,
 };
 use anyhow::anyhow;
 use axum::{
@@ -13,7 +13,7 @@ use axum::{
     Json,
 };
 use eth::interact_contract::ContractInteract;
-use std::{collections::HashMap, vec};
+use std::collections::HashMap;
 
 pub async fn supplier_data_audit(
     State(state): State<CD2NState>,
@@ -30,7 +30,6 @@ pub async fn supplier_data_audit(
 
     while let Some(field) = multipart.next_field().await.unwrap() {
         if let Some(name) = field.name() {
-            println!("name is :{:?}", name);
             match name {
                 "file" => {
                     file_data = field
@@ -61,18 +60,12 @@ pub async fn supplier_data_audit(
                     })?;
                 }
                 "key" => {
-                    key = serde_json::from_slice::<Vec<u8>>(
-                        &field
-                            .bytes()
-                            .await
-                            .map_err(|e| {
-                                return_error(
-                                    anyhow!("The input key is incorrect:{:?}", e.to_string()),
-                                    StatusCode::BAD_REQUEST,
-                                )
-                            })?
-                            .to_vec(),
-                    )
+                    key = hex::decode(&field.text().await.map_err(|e| {
+                        return_error(
+                            anyhow!("The input key is incorrect:{:?}", e.to_string()),
+                            StatusCode::BAD_REQUEST,
+                        )
+                    })?)
                     .map_err(|e| {
                         return_error(
                             anyhow!("Error when parsing key:{:?}", e.to_string()),
@@ -81,18 +74,12 @@ pub async fn supplier_data_audit(
                     })?;
                 }
                 "nonce" => {
-                    nonce = serde_json::from_slice::<Vec<u8>>(
-                        &field
-                            .bytes()
-                            .await
-                            .map_err(|e| {
-                                return_error(
-                                    anyhow!("The input nonce is incorrect:{:?}", e.to_string()),
-                                    StatusCode::BAD_REQUEST,
-                                )
-                            })?
-                            .to_vec(),
-                    )
+                    nonce = hex::decode(&field.text().await.map_err(|e| {
+                        return_error(
+                            anyhow!("The input nonce is incorrect:{:?}", e.to_string()),
+                            StatusCode::BAD_REQUEST,
+                        )
+                    })?)
                     .map_err(|e| {
                         return_error(
                             anyhow!("Error when parsing nonce:{:?}", e.to_string()),
@@ -117,18 +104,12 @@ pub async fn supplier_data_audit(
                     })?;
                 }
                 "user_sign" => {
-                    user_sign = serde_json::from_slice::<Vec<u8>>(
-                        &field
-                            .bytes()
-                            .await
-                            .map_err(|e| {
-                                return_error(
-                                    anyhow!("The input user_sign is incorrect:{:?}", e.to_string()),
-                                    StatusCode::BAD_REQUEST,
-                                )
-                            })?
-                            .to_vec(),
-                    )
+                    user_sign = hex::decode(&field.text().await.map_err(|e| {
+                        return_error(
+                            anyhow!("The input user_sign is incorrect:{:?}", e.to_string()),
+                            StatusCode::BAD_REQUEST,
+                        )
+                    })?)
                     .map_err(|e| {
                         return_error(
                             anyhow!("Error when parsing user_sign:{:?}", e.to_string()),
@@ -190,7 +171,7 @@ pub async fn supplier_data_audit(
             //If this user is first time request,check the contract and set the download capacity
             let download_capacity = state
                 .contract
-                .get_user_order(&state.wallet.lock().await.eth_public_address, &user_acc)
+                .get_user_order(&state.wallet.eth_public_address, &user_acc)
                 .await
                 .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
@@ -224,33 +205,36 @@ pub async fn supplier_data_audit(
 
     //Try to decrypt the data with the shared secret
     let data_provider_secp256k1_pubkey = key;
-    let shared_secret = state
-        .wallet
-        .lock()
-        .await
-        .ecdh_agreement(data_provider_secp256k1_pubkey.try_into().map_err(|_| {
-            return_error(
-                anyhow!("Invalid data provider public key,Please have a check"),
-                StatusCode::BAD_REQUEST,
-            )
-        })?)
-        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-
-    let data = state
-        .wallet
-        .lock()
-        .await
-        .decrypt_data_with_shared_secret_and_nonce(
-            &file_data,
-            shared_secret,
-            &nonce.try_into().map_err(|_| {
+    let data = if data_provider_secp256k1_pubkey.len() != 0 {
+        let shared_secret = state
+            .wallet
+            .ecdh_agreement(data_provider_secp256k1_pubkey.try_into().map_err(|_| {
                 return_error(
-                    anyhow!("The length of nonce must be 12!"),
+                    anyhow!("Invalid data provider public key,Please have a check"),
                     StatusCode::BAD_REQUEST,
                 )
-            })?,
-        )
-        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+            })?)
+            .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+
+        println!("shared_secret{:?}", hex::encode(&shared_secret));
+        let data = state
+            .wallet
+            .decrypt_data_with_shared_secret_and_nonce(
+                &file_data,
+                shared_secret,
+                &nonce.try_into().map_err(|_| {
+                    return_error(
+                        anyhow!("The length of nonce must be 12!"),
+                        StatusCode::BAD_REQUEST,
+                    )
+                })?,
+            )
+            .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+
+        data
+    } else {
+        file_data
+    };
 
     // Compute the data cid and compare it with the one in the request
     let data_cid = crate::utils::ipfs::compute_ipfs_cid_from_bytes(data.clone())
@@ -279,46 +263,57 @@ pub async fn supplier_data_audit(
     };
 
     // Update the reward record in safe storage file.
-    let safe_storage_path_guard = state.safe_storage_path.lock().await;
-    let path = std::path::Path::new(&safe_storage_path_guard.clone()).join(REWARD_RECORD_FILE);
-    let mut previous_seal_data = RewardDatabase {
-        users: HashMap::new(),
-    };
-    previous_seal_data
-        .unseal_data(&path)
+    let mut incentive_record_storage_guard = state.incentive_record_storage.lock().await;
+
+    let mut previous_seal_data: RewardDatabase = incentive_record_storage_guard
+        .unseal_data()
         .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
-    let record = previous_seal_data.users.get(&user_acc);
-    let new_reward = if let Some(record) = record {
-        UserReward {
-            total_reward: data.len() as u64 + record.total_reward,
-            last_updated_block_number: state
-                .contract
-                .get_current_block_number()
-                .await
-                .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?,
+    match previous_seal_data.users_supplier_map.get_mut(&user_acc) {
+        Some(record_map) => {
+            let new_reward = if let Some(reward_record) = record_map.get(&supplier_acc) {
+                SupplierReward {
+                    total_reward: data.len() as u64 + reward_record.total_reward,
+                    last_updated_block_number: state
+                        .contract
+                        .get_current_block_number()
+                        .await
+                        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?,
+                }
+            } else {
+                SupplierReward {
+                    total_reward: data.len() as u64,
+                    last_updated_block_number: state
+                        .contract
+                        .get_current_block_number()
+                        .await
+                        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?,
+                }
+            };
+            record_map.insert(supplier_acc.clone(), new_reward);
         }
-    } else {
-        UserReward {
-            total_reward: data.len() as u64,
-            last_updated_block_number: state
-                .contract
-                .get_current_block_number()
-                .await
-                .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?,
+        None => {
+            let mut new_record_map = HashMap::new();
+            let new_reward = SupplierReward {
+                total_reward: data.len() as u64,
+                last_updated_block_number: state
+                    .contract
+                    .get_current_block_number()
+                    .await
+                    .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?,
+            };
+            new_record_map.insert(supplier_acc.clone(), new_reward);
+            previous_seal_data
+                .users_supplier_map
+                .insert(user_acc.clone(), new_record_map);
         }
     };
-    previous_seal_data
-        .users
-        .insert(user_acc.clone(), new_reward);
-
     println!(
         "save reward record:{:?}",
-        previous_seal_data.users.get(&user_acc)
+        previous_seal_data.users_supplier_map.get(&user_acc)
     );
-
-    previous_seal_data
-        .seal_data(path)
+    incentive_record_storage_guard
+        .seal_data(&previous_seal_data)
         .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
     let response = SupplierDataAuditResponse {
@@ -326,6 +321,37 @@ pub async fn supplier_data_audit(
         data,
     };
 
+    Ok(Json(response))
+}
+
+pub async fn query_information(
+    State(state): State<CD2NState>,
+) -> Result<Json<QueryInformationResponse>, AppError> {
+    let response = QueryInformationResponse {
+        eth_address: state.wallet.eth_public_address.clone(),
+        secp256k1_public_key: state.wallet.public_key.clone(),
+    };
+    Ok(Json(response))
+}
+
+pub async fn download_capacity_query(
+    State(state): State<CD2NState>,
+    Json(params): Json<QueryDownloadCapacity>,
+) -> Result<Json<QueryDownloadCapacityResponse>, AppError> {
+    let mut redis_guard = state.redis_conn.lock().await;
+    let user_capacity = redis_guard
+        .get_data(&params.user_eth_address)
+        .await
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?
+        .map_or(Ok(0), |x| {
+            x.parse()
+                .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))
+        })?;
+
+    let response = QueryDownloadCapacityResponse {
+        user_eth_address: params.user_eth_address,
+        left_user_download_capacity: user_capacity,
+    };
     Ok(Json(response))
 }
 
@@ -350,47 +376,6 @@ pub async fn test_echo(
         .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
     println!("{:?}", result);
-
-    //test tee storage data
-    let user = params.key;
-
-    let safe_storage_path_guard = state.safe_storage_path.lock().await;
-
-    let path = std::path::Path::new(&safe_storage_path_guard.clone()).join(REWARD_RECORD_FILE);
-    let mut previous_seal_data = RewardDatabase {
-        users: HashMap::new(),
-    };
-    previous_seal_data
-        .unseal_data(&path)
-        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-
-    let record = previous_seal_data.users.get(&user);
-    let new_reward = if let Some(record) = record {
-        UserReward {
-            total_reward: params.reward + record.total_reward,
-            last_updated_block_number: state
-                .contract
-                .get_current_block_number()
-                .await
-                .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?,
-        }
-    } else {
-        UserReward {
-            total_reward: params.reward,
-            last_updated_block_number: state
-                .contract
-                .get_current_block_number()
-                .await
-                .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?,
-        }
-    };
-    previous_seal_data.users.insert(user.clone(), new_reward);
-
-    println!("------------{:?}", previous_seal_data.users.get(&user));
-
-    previous_seal_data
-        .seal_data(path)
-        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
     let response = TestEchoResponse {};
     Ok(Json(response))

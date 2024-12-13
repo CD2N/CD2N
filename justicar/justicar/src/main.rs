@@ -1,6 +1,7 @@
 use anyhow::Result;
 mod handlers;
 mod models;
+mod periodic_rewards;
 mod routes;
 mod utils;
 use clap::Parser;

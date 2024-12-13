@@ -1,14 +1,22 @@
-use crate::models::Wallet;
 use aes_gcm::aead::Aead;
 use aes_gcm::{Aes256Gcm, Nonce};
 use aes_gcm::{Key, KeyInit};
+use alloy::signers::local::{coins_bip39::English, MnemonicBuilder};
 use anyhow::{anyhow, Context, Result};
 use bip39::{Language, Mnemonic};
 use secp256k1::{PublicKey, Secp256k1, SecretKey};
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tiny_keccak::{Hasher, Keccak};
 
-use alloy::signers::local::{coins_bip39::English, MnemonicBuilder};
+#[derive(Clone, Serialize, Deserialize)]
+pub struct Wallet {
+    pub private_key: [u8; 32],
+    pub public_key: Vec<u8>,
+    pub mnemonic: String,
+    pub eth_public_address: String,
+}
+
 pub fn generate_new_wallet() -> Result<Wallet> {
     let mnemonic = Mnemonic::generate_in(Language::English, 12).unwrap();
 
@@ -70,7 +78,7 @@ pub fn convert_public_key_to_eth_address(public_key: [u8; 33]) -> Result<String>
     let mut hash = [0u8; 32];
     keccak.finalize(&mut hash);
 
-    let mut eth_address_byte = hash[12..].to_vec();
+    let eth_address_byte = hash[12..].to_vec();
 
     Ok(hex::encode_upper(eth_address_byte))
 }
@@ -163,6 +171,34 @@ mod tests {
         ];
 
         assert_eq!(convert_public_key_to_eth_address(eth_pbk)?, eth_address);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_ecdh_agreement() -> Result<()> {
+        let wallet_a = generate_new_wallet()?;
+        let wallet_b = generate_new_wallet()?;
+        let secret = wallet_a.ecdh_agreement(wallet_b.public_key.clone().try_into().unwrap())?;
+
+        println!(
+            "walletA private key: {:#?}",
+            hex::encode(wallet_a.private_key)
+        );
+        println!(
+            "walletA public key: {:#?}",
+            hex::encode(wallet_a.public_key)
+        );
+        println!(
+            "walletB private key: {:#?}",
+            hex::encode(wallet_b.private_key)
+        );
+        println!(
+            "walletB public key: {:#?}",
+            hex::encode(wallet_b.public_key)
+        );
+
+        println!("Secret: {:#?}", hex::encode(secret));
 
         Ok(())
     }

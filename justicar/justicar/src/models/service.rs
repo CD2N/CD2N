@@ -1,6 +1,6 @@
 use crate::utils::seal::Sealing;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{collections::HashMap, io::Write};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SupplierDataAuditRequest {
@@ -21,6 +21,23 @@ pub struct SupplierDataAuditResponse {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+pub struct QueryInformationResponse {
+    pub eth_address: String,
+    pub secp256k1_public_key: Vec<u8>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct QueryDownloadCapacity {
+    pub user_eth_address: String,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct QueryDownloadCapacityResponse {
+    pub user_eth_address: String,
+    pub left_user_download_capacity: i32,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TestEcho {
     pub key: String,
     pub value: String,
@@ -30,40 +47,14 @@ pub struct TestEcho {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct TestEchoResponse {}
 
-//
 #[derive(Serialize, Deserialize, Debug)]
-pub struct UserReward {
+pub struct SupplierReward {
     pub total_reward: u64,
     pub last_updated_block_number: u64,
 }
 
-//"cX...Xm": { "total_reward": 100, "last_updated": "15463" },
+//"user_acc":{"supplier_acc":{"total_reward":100,"last_updated":"15463"}...}
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RewardDatabase {
-    pub users: HashMap<String, UserReward>,
-}
-
-impl Sealing for RewardDatabase {
-    fn seal_data(&self, path: impl AsRef<std::path::Path>) -> Result<(), anyhow::Error> {
-        let seal_data_bytes = serde_json::to_vec(&self).unwrap();
-        std::fs::write(&path, seal_data_bytes)?;
-        Ok(())
-    }
-
-    fn unseal_data(&mut self, path: impl AsRef<std::path::Path>) -> Result<Vec<u8>, anyhow::Error> {
-        let unseal_data = match std::fs::read(&path) {
-            Err(err) if matches!(err.kind(), std::io::ErrorKind::NotFound) => Ok(None),
-            other => other.map(Some),
-        }?;
-
-        if unseal_data.is_some() {
-            let reward_database: RewardDatabase =
-                serde_json::from_slice(&unseal_data.clone().unwrap()).unwrap();
-            self.users = reward_database.users;
-
-            Ok(unseal_data.unwrap())
-        } else {
-            Ok(Vec::new())
-        }
-    }
+    pub users_supplier_map: HashMap<String, HashMap<String, SupplierReward>>,
 }

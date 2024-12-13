@@ -1,8 +1,8 @@
 use anyhow::Error;
-use std::path::Path;
+use serde::Serialize;
 
-pub const REWARD_RECORD_FILE: &str = "reward_record.seal";
 pub trait Sealing {
-    fn seal_data(&self, path: impl AsRef<Path>) -> Result<(), Error>;
-    fn unseal_data(&mut self, path: impl AsRef<Path>) -> Result<Vec<u8>, Error>;
+    fn seal_data<Sealable: ?Sized + Serialize>(&mut self, data: &Sealable) -> Result<(), Error>;
+
+    fn unseal_data<T: serde::de::DeserializeOwned>(&mut self) -> Result<T, Error>;
 }
