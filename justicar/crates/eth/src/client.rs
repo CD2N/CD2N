@@ -5,7 +5,7 @@ use alloy::{
     providers::{Provider, ProviderBuilder, WsConnect},
     sol,
 };
-use anyhow::{anyhow, Context};
+use anyhow::Context;
 use CDN::CDNInstance;
 sol!(
     #[allow(missing_docs)]

@@ -7,7 +7,7 @@ mod utils;
 use clap::Parser;
 use models::args::Args;
 
-static CONTRACT_ADDRESS: &str = "769Ba37De24a264289F161efeAF5fd03Fe520C58";
+static CONTRACT_ADDRESS: &str = "ce078A9098dF68189Cbe7A42FC629A4bDCe7dDD4";
 
 #[tokio::main]
 async fn main() -> Result<()> {

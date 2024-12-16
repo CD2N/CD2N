@@ -5,9 +5,9 @@ pub struct Bloom {
 }
 
 impl Bloom {
-    pub fn create_bloom_filter(rate: f32, filter_capacity: u32) -> Self {
+    pub fn create_bloom_filter(rate: f32, filter_traffic: u32) -> Self {
         Bloom {
-            bloom_filter: BloomFilter::with_rate(rate, filter_capacity),
+            bloom_filter: BloomFilter::with_rate(rate, filter_traffic),
         }
     }
     pub fn insert_value(&mut self, value: String) {

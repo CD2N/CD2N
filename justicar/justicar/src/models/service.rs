@@ -27,14 +27,14 @@ pub struct QueryInformationResponse {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct QueryDownloadCapacity {
+pub struct QueryDownloadTraffic {
     pub user_eth_address: String,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct QueryDownloadCapacityResponse {
+pub struct QueryDownloadTrafficResponse {
     pub user_eth_address: String,
-    pub left_user_download_capacity: i32,
+    pub left_user_download_traffic: i64,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -47,14 +47,16 @@ pub struct TestEcho {
 #[derive(Clone, Serialize, Deserialize)]
 pub struct TestEchoResponse {}
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SupplierReward {
     pub total_reward: u64,
     pub last_updated_block_number: u64,
 }
 
 //"user_acc":{"supplier_acc":{"total_reward":100,"last_updated":"15463"}...}
+//when key "supplier_acc" is 0x0000000000000000000000000000000000000000,get value record the number of the user used traffic.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct RewardDatabase {
     pub users_supplier_map: HashMap<String, HashMap<String, SupplierReward>>,
 }
+pub const TOTAL_USER_USED_TRAFFIC: &str = "0x0000000000000000000000000000000000000000";
