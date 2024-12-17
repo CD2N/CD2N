@@ -67,7 +67,7 @@ contract CacheProtocol is Ownable {
 
     event Exit(address indexed nodeAcc);
 
-    constructor(address peerid) Ownable(msg.sender) {
+    constructor(address peerid, address _owner) Ownable(_owner) {
         peerId = peerid;
         createTime = block.timestamp;
         UnitPrice = 1192092895;
