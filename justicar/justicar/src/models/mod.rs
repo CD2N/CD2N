@@ -6,14 +6,12 @@ use crate::utils::{
     wallet::{generate_new_wallet, Wallet},
 };
 use anyhow::Result;
-use db::client::RedisConn;
 use eth::client::Eth;
 use handover::handover::HandoverHandler;
 use std::{
     collections::HashMap,
     fs::{File, OpenOptions},
     io::{Read, Seek, SeekFrom, Write},
-    path::PathBuf,
     sync::Arc,
 };
 use tokio::sync::Mutex;
@@ -24,7 +22,6 @@ pub const REWARD_RECORD_FILE: &str = "reward_record.seal";
 pub struct CD2NState {
     pub handover_handler: Arc<Mutex<HandoverHandler>>,
     pub contract: Arc<Eth>,
-    pub redis_conn: Arc<Mutex<RedisConn>>,
     pub wallet: Wallet,
     pub bloom: Arc<Mutex<Bloom>>,
     pub incentive_record_storage: Arc<Mutex<IncentiveRecordStorage>>,
@@ -38,17 +35,18 @@ impl CD2NState {
         pccs_url: String,
         ra_timeout: u64,
         rpc_url: String,
-        redis_url: String,
         safe_storage_path: String,
         contract_addr: String,
     ) -> Result<Self> {
+        let wallet = generate_new_wallet()?;
         Ok(CD2NState {
             handover_handler: Arc::new(Mutex::new(HandoverHandler::new(
                 dev_mode, pccs_url, ra_timeout,
             ))),
-            contract: Arc::new(Eth::get_contract_conn(&rpc_url, contract_addr).await?),
-            redis_conn: Arc::new(Mutex::new(RedisConn::create_connection(&redis_url).await?)),
-            wallet: generate_new_wallet()?,
+            contract: Arc::new(
+                Eth::get_contract_conn(&rpc_url, contract_addr, wallet.mnemonic.clone()).await?,
+            ),
+            wallet,
             bloom: Arc::new(Mutex::new(Bloom::create_bloom_filter(0.01, 100_000_000))),
             incentive_record_storage: Arc::new(Mutex::new(IncentiveRecordStorage(
                 OpenOptions::new()

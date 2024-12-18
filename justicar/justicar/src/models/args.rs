@@ -4,13 +4,6 @@ use clap::Parser;
 #[command(author, version, about)]
 pub struct Args {
     #[arg(
-        default_value = "redis://rwuser:rwuser_password@127.0.0.1/",
-        long = "redis-url",
-        help = "The redis URL required for CD2N to run."
-    )]
-    pub redis_url: String,
-
-    #[arg(
         default_value = "https://dcap-sgp-dev.cess.cloud/sgx/certification/v4/",
         long = "pccs-url",
         help = "PCCS service URL required for Intel DCAP attestation."
@@ -37,6 +30,13 @@ pub struct Args {
         help = "Paths where some file contents that need to be protected by TEE storage path.To change the default settings, you must first check the template file."
     )]
     pub safe_storage_path: String,
+
+    #[arg(
+        default_value = "30",
+        long = "reward_block_interval",
+        help = "After how many blocks, rewards will be sent to traffic providers."
+    )]
+    pub reward_block_interval: u64,
 
     #[arg(
         default_value = "false",

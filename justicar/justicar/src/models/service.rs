@@ -49,13 +49,13 @@ pub struct TestEchoResponse {}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct SupplierReward {
-    pub total_reward: u64,
+    pub total_reward: i64,
     pub last_updated_block_number: u64,
 }
 
 //"user_acc":{"supplier_acc":{"total_reward":100,"last_updated":"15463"}...}
 //when key "supplier_acc" is 0x0000000000000000000000000000000000000000,get value record the number of the user used traffic.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct RewardDatabase {
     pub users_supplier_map: HashMap<String, HashMap<String, SupplierReward>>,
 }

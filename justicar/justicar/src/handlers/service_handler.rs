@@ -154,25 +154,25 @@ pub async fn supplier_data_audit(
         ));
     }
 
-    // //Set the request into bloom filter. Preventing duplicate requests.
-    // if state
-    //     .bloom
-    //     .clone()
-    //     .lock()
-    //     .await
-    //     .check_value(request_id.clone())
-    // {
-    //     return Err(return_error(
-    //         anyhow!("This request:{:?} has been submitted before!", request_id),
-    //         StatusCode::BAD_REQUEST,
-    //     ));
-    // };
-    // state
-    //     .bloom
-    //     .clone()
-    //     .lock()
-    //     .await
-    //     .insert_value(request_id.clone());
+    //Set the request into bloom filter. Preventing duplicate requests.
+    if state
+        .bloom
+        .clone()
+        .lock()
+        .await
+        .check_value(request_id.clone())
+    {
+        return Err(return_error(
+            anyhow!("This request:{:?} has been submitted before!", request_id),
+            StatusCode::BAD_REQUEST,
+        ));
+    };
+    state
+        .bloom
+        .clone()
+        .lock()
+        .await
+        .insert_value(request_id.clone());
 
     //Try to decrypt the data with the shared secret
     let data_provider_secp256k1_pubkey = key;
@@ -207,16 +207,16 @@ pub async fn supplier_data_audit(
         file_data
     };
 
-    // // Compute the data cid and compare it with the one in the request
-    // let data_cid = crate::utils::ipfs::compute_ipfs_cid_from_bytes(data.clone())
-    //     .map_err(|e: anyhow::Error| return_error(e, StatusCode::BAD_REQUEST))?;
+    // Compute the data cid and compare it with the one in the request
+    let data_cid = crate::utils::ipfs::compute_ipfs_cid_from_bytes(data.clone())
+        .map_err(|e: anyhow::Error| return_error(e, StatusCode::BAD_REQUEST))?;
 
-    // if cid != data_cid {
-    //     return Err(return_error(
-    //         anyhow!("The decrypted data is not match the cid in the request!"),
-    //         StatusCode::BAD_REQUEST,
-    //     ));
-    // }
+    if cid != data_cid {
+        return Err(return_error(
+            anyhow!("The decrypted data is not match the cid in the request!"),
+            StatusCode::BAD_REQUEST,
+        ));
+    }
 
     // Get reward record in safe storage file.
     let mut incentive_record_storage_guard = state.incentive_record_storage.lock().await;
@@ -230,7 +230,7 @@ pub async fn supplier_data_audit(
         Some(record_map) => {
             let new_reward: i64 =
                 if let Some(reward_record) = record_map.get(TOTAL_USER_USED_TRAFFIC) {
-                    reward_record.total_reward as i64
+                    reward_record.total_reward
                 } else {
                     return Err(return_error(
                         anyhow!("The user's total used traffic is not found in the storage!"),
@@ -274,12 +274,12 @@ pub async fn supplier_data_audit(
             let supplier_new_reward_record =
                 if let Some(reward_record) = record_map.get(&supplier_acc) {
                     SupplierReward {
-                        total_reward: data.len() as u64 + reward_record.total_reward,
+                        total_reward: data.len() as i64 + reward_record.total_reward,
                         last_updated_block_number: latest_block_number,
                     }
                 } else {
                     SupplierReward {
-                        total_reward: data.len() as u64,
+                        total_reward: data.len() as i64,
                         last_updated_block_number: latest_block_number,
                     }
                 };
@@ -287,12 +287,12 @@ pub async fn supplier_data_audit(
             let user_new_used_traffic_record =
                 if let Some(reward_record) = record_map.get(TOTAL_USER_USED_TRAFFIC) {
                     SupplierReward {
-                        total_reward: data.len() as u64 + reward_record.total_reward,
+                        total_reward: data.len() as i64 + reward_record.total_reward,
                         last_updated_block_number: latest_block_number,
                     }
                 } else {
                     SupplierReward {
-                        total_reward: data.len() as u64,
+                        total_reward: data.len() as i64,
                         last_updated_block_number: latest_block_number,
                     }
                 };
@@ -306,7 +306,7 @@ pub async fn supplier_data_audit(
         None => {
             let mut new_record_map = HashMap::new();
             let new_reward = SupplierReward {
-                total_reward: data.len() as u64,
+                total_reward: data.len() as i64,
                 last_updated_block_number: latest_block_number,
             };
             new_record_map.insert(supplier_acc.clone(), new_reward.clone());
@@ -367,7 +367,7 @@ pub async fn download_traffic_query(
         Some(record_map) => {
             let user_used_traffic: i64 =
                 if let Some(reward_record) = record_map.get(TOTAL_USER_USED_TRAFFIC) {
-                    reward_record.total_reward as i64
+                    reward_record.total_reward
                 } else {
                     return Err(return_error(
                         anyhow!("The user's total used traffic is not found in the storage!"),
@@ -387,27 +387,9 @@ pub async fn download_traffic_query(
 }
 
 pub async fn test_echo(
-    State(state): State<CD2NState>,
-    Json(params): Json<TestEcho>,
+    State(_state): State<CD2NState>,
+    Json(_params): Json<TestEcho>,
 ) -> Result<Json<TestEchoResponse>, AppError> {
-    //test redis conn
-    let mut redis_guard = state.redis_conn.lock().await;
-
-    redis_guard
-        .set_data(&params.key, &params.value)
-        .await
-        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-
-    println!("{:?}", params.key.clone());
-    println!("{:?}", params.value.clone());
-
-    let result = redis_guard
-        .get_data(&params.key)
-        .await
-        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-
-    println!("{:?}", result);
-
     let response = TestEchoResponse {};
     Ok(Json(response))
 }

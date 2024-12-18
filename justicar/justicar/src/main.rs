@@ -1,35 +1,67 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 mod handlers;
 mod models;
 mod periodic_rewards;
 mod routes;
 mod utils;
 use clap::Parser;
+use env_logger;
+use log::info;
 use models::args::Args;
 
-static CONTRACT_ADDRESS: &str = "ce078A9098dF68189Cbe7A42FC629A4bDCe7dDD4";
+static CONTRACT_ADDRESS: &str = "D185AF24121d0D6a9A3e128fB27C3704569b5E91";
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
+    env_logger::init();
 
     let cd2n_state = models::CD2NState::new(
         args.dev_mode,
         args.pccs_url,
         args.ra_timeout,
         args.chain_rpc,
-        args.redis_url,
         args.safe_storage_path,
         CONTRACT_ADDRESS.to_string(),
     )
     .await?;
+
     // build our application with a route and state
-    let app = routes::create_routes(cd2n_state).await;
+    let app = routes::create_routes(cd2n_state.clone()).await;
+
+    let periodic_rewards_task: tokio::task::JoinHandle<Result<()>> = tokio::spawn(async move {
+        info!("Starting periodic rewards task...");
+        periodic_rewards::periodic_rewards(
+            args.reward_block_interval,
+            cd2n_state.clone().incentive_record_storage,
+            cd2n_state.clone().contract,
+        )
+        .await
+    });
 
     // run it
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:1309").await.unwrap();
+    let app_task: tokio::task::JoinHandle<Result<()>> = tokio::spawn(async {
+        let listener = tokio::net::TcpListener::bind("0.0.0.0:1309").await?;
 
-    println!("listening on {}", listener.local_addr().unwrap());
-    axum::serve(listener, app).await.unwrap();
+        info!(
+            "app listening on {}",
+            listener
+                .local_addr()
+                .context("Failed to get local address")?
+        );
+        axum::serve(listener, app)
+            .await
+            .context("Failed to start server")
+    });
+
+    let (periodic_rewards_result, app_task_result) = tokio::join!(periodic_rewards_task, app_task);
+
+    if let Err(periodic_rewards_err) = periodic_rewards_result {
+        panic!("Periodic rewards task failed: {:?}", periodic_rewards_err);
+    }
+    if let Err(app_task_err) = app_task_result {
+        panic!("App task failed: {:?}", app_task_err);
+    }
+
     Ok(())
 }

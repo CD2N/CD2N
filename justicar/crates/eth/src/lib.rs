@@ -1,4 +1,3 @@
-pub mod balance;
 pub mod client;
 pub mod error;
 pub mod interact_contract;
@@ -13,7 +12,9 @@ mod tests {
     async fn test_contract_conn() -> Result<()> {
         let contract = crate::client::Eth::get_contract_conn(
             "ws://139.180.142.180:9944",
-            "ce078A9098dF68189Cbe7A42FC629A4bDCe7dDD4".to_string(),
+            "D185AF24121d0D6a9A3e128fB27C3704569b5E91".to_string(),
+            "caught mutual reform reward shove tackle nest popular seminar twelve devote expand"
+                .to_string(),
         )
         .await?;
 
@@ -26,7 +27,9 @@ mod tests {
     async fn test_get_user_total_traffic() -> Result<()> {
         let contract = crate::client::Eth::get_contract_conn(
             "ws://139.180.142.180:9944",
-            "ce078A9098dF68189Cbe7A42FC629A4bDCe7dDD4".to_string(),
+            "D185AF24121d0D6a9A3e128fB27C3704569b5E91".to_string(),
+            "caught mutual reform reward shove tackle nest popular seminar twelve devote expand"
+                .to_string(),
         )
         .await?;
 
@@ -37,6 +40,37 @@ mod tests {
             )
             .await?;
         println!("user_total_traffic is :{:?}", user_total_traffic);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_subscribe_block_numbers_until() -> Result<()> {
+        let contract = crate::client::Eth::get_contract_conn(
+            "ws://139.180.142.180:9944",
+            "D185AF24121d0D6a9A3e128fB27C3704569b5E91".to_string(),
+            "caught mutual reform reward shove tackle nest popular seminar twelve devote expand"
+                .to_string(),
+        )
+        .await?;
+
+        let i = 5;
+        contract.subscribe_block_numbers_amount(i).await?;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_add_mrenclave() -> Result<()> {
+        let contract = crate::client::Eth::get_contract_conn(
+            "ws://139.180.142.180:9944",
+            "D185AF24121d0D6a9A3e128fB27C3704569b5E91".to_string(),
+            "caught mutual reform reward shove tackle nest popular seminar twelve devote expand"
+                .to_string(),
+        )
+        .await?;
+
+        let tx_hash = contract.add_mrenclave("testtest2").await?;
+        println!("tx_hash is :0x{:?}", tx_hash);
         Ok(())
     }
 }

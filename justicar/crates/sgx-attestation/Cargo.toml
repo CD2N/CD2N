@@ -8,14 +8,11 @@ hex = { workspace = true, features = ["alloc"] }
 serde = { workspace = true, features = ["derive"] }
 pink-json = { workspace = true, default-features = false }
 base64 = { workspace = true, features = ["alloc"] }
-scale = { workspace = true, default-features = false, features = [
+scale = { workspace = true, default-features = false, features = ["derive"] }
+scale-info = { workspace = true, default-features = false, features = [
     "derive",
 ] }
-scale-info = { workspace = true, default-features = false, features = ["derive"] }
-chrono = { workspace = true, default-features = false, features = [
-    "alloc",
-    "serde",
-] }
+chrono = { workspace = true, features = ["alloc", "serde"] }
 const-oid = { workspace = true, default-features = false }
 x509-cert = { workspace = true, default-features = false }
 byteorder = { workspace = true, default-features = false }
@@ -42,7 +39,7 @@ serde_json = { workspace = true, optional = true, features = [
     "preserve_order",
 ] }
 tracing = { workspace = true, optional = true }
-tokio ={ workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
 
 webpki = { workspace = true, features = ["alloc", "ring"] }
 
