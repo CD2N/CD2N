@@ -6,7 +6,6 @@ edition = "2021"
 [dependencies]
 sgx-attestation = { workspace = true }
 eth = { workspace = true, default-features = true }
-db = { workspace = true, default-features = true }
 handover = { workspace = true }
 hex = { workspace = true, features = ["alloc"] }
 chrono = { workspace = true }
@@ -27,4 +26,5 @@ sha2 = { workspace = true }
 bloom = { workspace = true }
 tiny-keccak = { workspace = true }
 log = { workspace = true }
+env_logger = { workspace = true }
 tower-http = { workspace = true, features = ["limit", "trace"] }

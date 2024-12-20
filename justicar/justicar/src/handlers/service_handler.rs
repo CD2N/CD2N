@@ -1,8 +1,9 @@
 use super::*;
 use crate::{
     models::service::{
-        QueryDownloadCapacity, QueryDownloadCapacityResponse, QueryInformationResponse,
+        QueryDownloadTraffic, QueryDownloadTrafficResponse, QueryInformationResponse,
         RewardDatabase, SupplierDataAuditResponse, SupplierReward, TestEcho, TestEchoResponse,
+        TOTAL_USER_USED_TRAFFIC,
     },
     utils::seal::Sealing,
 };
@@ -13,6 +14,7 @@ use axum::{
     Json,
 };
 use eth::interact_contract::ContractInteract;
+use log::info;
 use std::collections::HashMap;
 
 pub async fn supplier_data_audit(
@@ -152,37 +154,6 @@ pub async fn supplier_data_audit(
         ));
     }
 
-    let mut redis_guard = state.redis_conn.lock().await;
-
-    //Get user download capacity from redis or contract
-    let user_capacity = match redis_guard
-        .get_data(&user_acc)
-        .await
-        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?
-    {
-        Some(data) => {
-            //Get user download capacity from redis
-            let num: i64 = data
-                .parse()
-                .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-            num
-        }
-        None => {
-            //If this user is first time request,check the contract and set the download capacity
-            let download_capacity = state
-                .contract
-                .get_user_order(&state.wallet.eth_public_address, &user_acc)
-                .await
-                .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-
-            redis_guard
-                .set_data(&user_acc, &format!("{}", download_capacity))
-                .await
-                .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-            download_capacity
-        }
-    };
-
     //Set the request into bloom filter. Preventing duplicate requests.
     if state
         .bloom
@@ -247,62 +218,100 @@ pub async fn supplier_data_audit(
         ));
     }
 
-    let left_download_capacity = user_capacity - data.len() as i64;
-
-    if left_download_capacity < 0 {
-        return Err(return_error(
-            anyhow!("The user's download capacity is not enough!"),
-            StatusCode::FORBIDDEN,
-        ));
-    } else {
-        // Update user download capacity in redis
-        redis_guard
-            .set_data(&user_acc, &format!("{}", left_download_capacity))
-            .await
-            .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-    };
-
-    // Update the reward record in safe storage file.
+    // Get reward record in safe storage file.
     let mut incentive_record_storage_guard = state.incentive_record_storage.lock().await;
 
     let mut previous_seal_data: RewardDatabase = incentive_record_storage_guard
         .unseal_data()
         .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
+    //Get the user's total used traffic
+    let user_used_traffic = match previous_seal_data.users_supplier_map.get_mut(&user_acc) {
+        Some(record_map) => {
+            let new_reward: i64 =
+                if let Some(reward_record) = record_map.get(TOTAL_USER_USED_TRAFFIC) {
+                    reward_record.total_reward
+                } else {
+                    return Err(return_error(
+                        anyhow!("The user's total used traffic is not found in the storage!"),
+                        StatusCode::BAD_REQUEST,
+                    ));
+                };
+            new_reward
+        }
+        None => 0,
+    };
+
+    let user_total_purchased_traffic = state
+        .contract
+        .get_user_total_traffic(&state.wallet.eth_public_address, &user_acc)
+        .await
+        .map_err(|e| {
+            return_error(
+                anyhow!("Failed when get user total traffic from contract:{:?}", e),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            )
+        })?;
+
+    //Check user's traffic enough or not.
+    let left_download_traffic =
+        user_total_purchased_traffic - data.len() as i64 - user_used_traffic;
+
+    if left_download_traffic < 0 {
+        return Err(return_error(
+            anyhow!("The user's traffic is not enough!"),
+            StatusCode::FORBIDDEN,
+        ));
+    }
+
+    let latest_block_number = state
+        .contract
+        .get_current_block_number()
+        .await
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
     match previous_seal_data.users_supplier_map.get_mut(&user_acc) {
         Some(record_map) => {
-            let new_reward = if let Some(reward_record) = record_map.get(&supplier_acc) {
-                SupplierReward {
-                    total_reward: data.len() as u64 + reward_record.total_reward,
-                    last_updated_block_number: state
-                        .contract
-                        .get_current_block_number()
-                        .await
-                        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?,
-                }
-            } else {
-                SupplierReward {
-                    total_reward: data.len() as u64,
-                    last_updated_block_number: state
-                        .contract
-                        .get_current_block_number()
-                        .await
-                        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?,
-                }
-            };
-            record_map.insert(supplier_acc.clone(), new_reward);
+            let supplier_new_reward_record =
+                if let Some(reward_record) = record_map.get(&supplier_acc) {
+                    SupplierReward {
+                        total_reward: data.len() as i64 + reward_record.total_reward,
+                        last_updated_block_number: latest_block_number,
+                    }
+                } else {
+                    SupplierReward {
+                        total_reward: data.len() as i64,
+                        last_updated_block_number: latest_block_number,
+                    }
+                };
+
+            let user_new_used_traffic_record =
+                if let Some(reward_record) = record_map.get(TOTAL_USER_USED_TRAFFIC) {
+                    SupplierReward {
+                        total_reward: data.len() as i64 + reward_record.total_reward,
+                        last_updated_block_number: latest_block_number,
+                    }
+                } else {
+                    SupplierReward {
+                        total_reward: data.len() as i64,
+                        last_updated_block_number: latest_block_number,
+                    }
+                };
+
+            record_map.insert(supplier_acc.clone(), supplier_new_reward_record);
+            record_map.insert(
+                TOTAL_USER_USED_TRAFFIC.to_string(),
+                user_new_used_traffic_record,
+            );
         }
         None => {
             let mut new_record_map = HashMap::new();
             let new_reward = SupplierReward {
-                total_reward: data.len() as u64,
-                last_updated_block_number: state
-                    .contract
-                    .get_current_block_number()
-                    .await
-                    .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?,
+                total_reward: data.len() as i64,
+                last_updated_block_number: latest_block_number,
             };
-            new_record_map.insert(supplier_acc.clone(), new_reward);
+            new_record_map.insert(supplier_acc.clone(), new_reward.clone());
+            new_record_map.insert(TOTAL_USER_USED_TRAFFIC.to_string(), new_reward);
+
             previous_seal_data
                 .users_supplier_map
                 .insert(user_acc.clone(), new_record_map);
@@ -334,49 +343,53 @@ pub async fn query_information(
     Ok(Json(response))
 }
 
-pub async fn download_capacity_query(
+pub async fn download_traffic_query(
     State(state): State<CD2NState>,
-    Json(params): Json<QueryDownloadCapacity>,
-) -> Result<Json<QueryDownloadCapacityResponse>, AppError> {
-    let mut redis_guard = state.redis_conn.lock().await;
-    let user_capacity = redis_guard
-        .get_data(&params.user_eth_address)
+    Json(params): Json<QueryDownloadTraffic>,
+) -> Result<Json<QueryDownloadTrafficResponse>, AppError> {
+    let user_total_purchased_traffic = state
+        .contract
+        .get_user_total_traffic(&state.wallet.eth_public_address, &params.user_eth_address)
         .await
-        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?
-        .map_or(Ok(0), |x| {
-            x.parse()
-                .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))
-        })?;
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
-    let response = QueryDownloadCapacityResponse {
+    let mut incentive_record_storage_guard = state.incentive_record_storage.lock().await;
+
+    let mut previous_seal_data: RewardDatabase = incentive_record_storage_guard
+        .unseal_data()
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+
+    //Get the user's total used traffic
+    let user_used_traffic = match previous_seal_data
+        .users_supplier_map
+        .get_mut(&state.wallet.eth_public_address)
+    {
+        Some(record_map) => {
+            let user_used_traffic: i64 =
+                if let Some(reward_record) = record_map.get(TOTAL_USER_USED_TRAFFIC) {
+                    reward_record.total_reward
+                } else {
+                    return Err(return_error(
+                        anyhow!("The user's total used traffic is not found in the storage!"),
+                        StatusCode::BAD_REQUEST,
+                    ));
+                };
+            user_used_traffic
+        }
+        None => 0,
+    };
+
+    let response = QueryDownloadTrafficResponse {
         user_eth_address: params.user_eth_address,
-        left_user_download_capacity: user_capacity,
+        left_user_download_traffic: user_total_purchased_traffic - user_used_traffic,
     };
     Ok(Json(response))
 }
 
 pub async fn test_echo(
-    State(state): State<CD2NState>,
-    Json(params): Json<TestEcho>,
+    State(_state): State<CD2NState>,
+    Json(_params): Json<TestEcho>,
 ) -> Result<Json<TestEchoResponse>, AppError> {
-    //test redis conn
-    let mut redis_guard = state.redis_conn.lock().await;
-
-    redis_guard
-        .set_data(&params.key, &params.value)
-        .await
-        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-
-    println!("{:?}", params.key.clone());
-    println!("{:?}", params.value.clone());
-
-    let result = redis_guard
-        .get_data(&params.key)
-        .await
-        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
-
-    println!("{:?}", result);
-
     let response = TestEchoResponse {};
     Ok(Json(response))
 }

@@ -12,7 +12,7 @@ USE_MUSL ?= 0
 
 BIN_NAME = justicar
 
-DATA_DIRS = data/reward_record
+DATA_DIRS = data/seal_data
 
 GRAMINE_DIR ?= $(shell ./gramine-dir libs)
 GRAMINE_LIBOS ?= $(shell ./gramine-dir libos)
