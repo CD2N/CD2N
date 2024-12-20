@@ -1,7 +1,9 @@
 pub(crate) mod internal_handler;
 pub(crate) mod service_handler;
-use crate::models::{CD2NState, RA};
-use crate::utils::wallet::Wallet;
+use crate::models::{
+    secret::{secret_from_cdn_state, secret_to_cdn_state, Secret},
+    CD2NState, RA,
+};
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},

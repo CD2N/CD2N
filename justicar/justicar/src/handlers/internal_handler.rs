@@ -1,5 +1,7 @@
+use crate::utils::seal::Sealing;
+
 use super::*;
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use async_trait::async_trait;
 use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use eth::interact_contract::ContractInteract;
@@ -114,7 +116,9 @@ impl RemoteAttestation for RA {
     }
 }
 
-pub async fn generate_challenge(State(state): State<CD2NState>) -> impl IntoResponse {
+pub async fn generate_challenge(
+    State(state): State<CD2NState>,
+) -> Result<Json<HandoverChallenge>, AppError> {
     let challenge = state
         .handover_handler
         .clone()
@@ -122,14 +126,14 @@ pub async fn generate_challenge(State(state): State<CD2NState>) -> impl IntoResp
         .await
         .generate_challenge(&state.clone())
         .await
-        .unwrap();
-    (StatusCode::OK, Json(challenge))
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+    Ok(Json(challenge))
 }
 
 pub async fn handover_accept_challenge(
     State(state): State<CD2NState>,
     Json(params): Json<HandoverChallenge>,
-) -> impl IntoResponse {
+) -> Result<Json<HandoverChallengeResponse>, AppError> {
     let ra = RA {};
     let handover_challenge_response = state
         .handover_handler
@@ -138,19 +142,25 @@ pub async fn handover_accept_challenge(
         .await
         .handover_accept_challenge(params, &ra)
         .await
-        .unwrap();
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
-    (StatusCode::OK, Json(handover_challenge_response))
+    Ok(Json(handover_challenge_response))
 }
 
 pub async fn handover_start(
     State(state): State<CD2NState>,
     Json(params): Json<HandoverChallengeResponse>,
-) -> impl IntoResponse {
+) -> Result<Json<HandoverSecretData>, AppError> {
     let ra = RA {};
-    let secret = state.wallet.clone();
+    let secret = secret_from_cdn_state(state.clone())
+        .await
+        .context("Get secret from cdn state failed")
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
-    let secret_data = serde_json::to_vec(&secret).unwrap();
+    let secret_data = serde_json::to_vec(&secret)
+        .context("serde secret to json failed")
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+
     let handover_secret_data = state
         .handover_handler
         .clone()
@@ -158,15 +168,15 @@ pub async fn handover_start(
         .await
         .handover_start(secret_data, params, &ra, &state)
         .await
-        .unwrap();
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
-    (StatusCode::OK, Json(handover_secret_data))
+    Ok(Json(handover_secret_data))
 }
 
 pub async fn handover_receive(
     State(mut state): State<CD2NState>,
     Json(params): Json<HandoverSecretData>,
-) -> impl IntoResponse {
+) -> Result<Json<()>, AppError> {
     let ra = RA {};
     let handover_secret_data = state
         .handover_handler
@@ -175,10 +185,14 @@ pub async fn handover_receive(
         .await
         .handover_receive(params, &ra, &state)
         .await
-        .unwrap();
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
-    let wallet: Wallet = serde_json::from_slice(&handover_secret_data).unwrap();
+    let secret: Secret = serde_json::from_slice(&handover_secret_data)
+        .context("Failed to parse json secret")
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
-    state.wallet = wallet;
-    StatusCode::OK
+    secret_to_cdn_state(secret, &mut state)
+        .await
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+    Ok(Json(()))
 }

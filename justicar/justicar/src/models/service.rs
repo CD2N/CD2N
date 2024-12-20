@@ -1,6 +1,5 @@
-use crate::utils::seal::Sealing;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, io::Write};
+use std::collections::HashMap;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SupplierDataAuditRequest {

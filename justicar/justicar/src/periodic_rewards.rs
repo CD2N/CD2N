@@ -1,4 +1,4 @@
-/// This module is responsible for periodically distributing rewards to data suppliers.
+/// This module is responsible for periodically distributing rewards to traffic suppliers.
 use crate::models::{service::RewardDatabase, IncentiveRecordStorage};
 use crate::utils::seal::Sealing;
 use anyhow::{Context, Result};
@@ -29,12 +29,13 @@ pub async fn periodic_rewards(
                 contract
                     .incentive_release(user_acc, supplier_acc, supplier_info.total_reward)
                     .await?;
+                info!("The traffic supllier {:?} reward from the user {:?} has been released successfully!",supplier_acc,user_acc);
 
                 //every time successfully rewarded, remove the supplier record and update into incentive record storage.
                 let mut supplier_owned_clone = supplier_records.to_owned().clone();
                 if let Some(removed_reward_record) = supplier_owned_clone.remove(supplier_acc) {
                     info!(
-                        "The data supplier {:?} has been rewarded with {} traffic, and the reward record has been removed.",
+                        "The traffic supplier {:?} has been rewarded with {} traffic, and the reward record has been removed.",
                         supplier_acc, removed_reward_record.total_reward
                     );
                 };

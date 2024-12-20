@@ -1,4 +1,5 @@
 pub(crate) mod args;
+pub(crate) mod secret;
 pub(crate) mod service;
 use crate::utils::{
     bloom::Bloom,
