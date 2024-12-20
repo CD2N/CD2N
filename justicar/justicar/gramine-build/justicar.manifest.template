@@ -32,7 +32,7 @@ path = "/etc"
 uri = "file:/etc"
 
 [[fs.mounts]]
-path = "/data/reward_record"
+path = "/data/seal_data"
 uri = "file:{{ seal_dir }}"
 type = "encrypted"
 key_name = "_sgx_mrenclave"

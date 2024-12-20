@@ -31,13 +31,12 @@ if [ "$SGX" -eq 1 ] && [ "$SKIP_AESMD" -eq 0 ]; then
   fi
 fi
 
-/usr/local/bin/sgx-detect
 
 WORK_DIR=$(dirname $(readlink -f "$0"))
 DATA_DIR=${DATA_DIR:-"${WORK_DIR}/data"}
 
-# echo "Work dir '${WORK_DIR}'"
-# echo "Data dir '${DATA_DIR}'"
+echo "Work dir '${WORK_DIR}'"
+echo "Data dir '${DATA_DIR}'"
 
 GRAMINE_SGX_BIN=${GRAMINE_SGX_BIN:-"${WORK_DIR}/gramine-sgx"}
 GRAMINE_DIRECT_BIN=${GRAMINE_DIRECT_BIN:-"gramine-direct"}
@@ -45,13 +44,14 @@ GRAMINE_DIRECT_BIN=${GRAMINE_DIRECT_BIN:-"gramine-direct"}
 if [ -L ${DATA_DIR} ] && [ ! -e ${DATA_DIR} ]; then
   mkdir -p $(readlink -f $DATA_DIR)
 fi
-mkdir -p "${DATA_DIR}/protected_files"
-mkdir -p "${DATA_DIR}/storage_files"
+mkdir -p "${DATA_DIR}/seal_data"
 
+
+echo "Starting CDN TEE with extra opts '${EXTRA_OPTS}'"
 if [ "$SGX" -eq 0 ]; then
   echo "DCAP test will running in software mode"
-  cd $WORK_DIR && $GRAMINE_DIRECT_BIN justicar
+  cd $WORK_DIR && $GRAMINE_DIRECT_BIN justicar $EXTRA_OPTS
 else
   echo "DCAP test will running in hardware mode"
-  cd $WORK_DIR && $GRAMINE_SGX_BIN justicar
+  cd $WORK_DIR && $GRAMINE_SGX_BIN justicar $EXTRA_OPTS
 fi

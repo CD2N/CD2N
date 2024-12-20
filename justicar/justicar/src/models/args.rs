@@ -25,7 +25,7 @@ pub struct Args {
     pub chain_rpc: String,
 
     #[arg(
-        default_value = "/data/reward_record",
+        default_value = "/data/seal_data",
         long = "safe_storage_path",
         help = "Paths where some file contents that need to be protected by TEE storage path.To change the default settings, you must first check the template file."
     )]

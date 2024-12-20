@@ -1,5 +1,0 @@
-user default off
-
-user rwuser on >rwuser_password allcommands allkeys
-
-user readonlyuser on >readonly_password ~* +@read -@write
