@@ -51,6 +51,12 @@ contract CacheProtocol is Ownable {
         uint256 term;
     }
 
+    string[] public MREnclaveList;
+
+    string[] public MRSignerList;
+
+    uint[] public UpdateBlockNumber;
+
     event Staking(address indexed nodeAcc, uint256 indexed tokenId);
 
     event OrderPayment(address indexed teeAcc, uint256 traffic);
@@ -61,7 +67,7 @@ contract CacheProtocol is Ownable {
 
     event Exit(address indexed nodeAcc);
 
-    constructor(address peerid) Ownable(msg.sender) {
+    constructor(address peerid, address _owner) Ownable(_owner) {
         peerId = peerid;
         createTime = block.timestamp;
         UnitPrice = 1192092895;
@@ -242,5 +248,26 @@ contract CacheProtocol is Ownable {
 
     function getCurrencyTerm() public view returns (uint256) {
         return ((block.timestamp - createTime) / 604800);
+    }
+
+    function addMREnclave (string memory value) external onlyOwner {
+        MREnclaveList.push(value);
+        UpdateBlockNumber.push(block.number);
+    }
+
+    function addMRSigner (string memory value) external onlyOwner {
+        MRSignerList.push(value);
+    }
+
+    function getAllMREnclaveList() external view returns (string[] memory) {
+        return MREnclaveList;
+    }
+
+    function getAllUpdateBlockNumber() external view returns (uint[] memory) {
+        return UpdateBlockNumber;
+    }
+
+    function getAllMRSignerList() external view returns (string[] memory) {
+        return MRSignerList;
     }
 }
