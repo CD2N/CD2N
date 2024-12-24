@@ -1,8 +1,8 @@
-use anyhow::Error;
+use anyhow::Result;
 use serde::Serialize;
 
 pub trait Sealing {
-    fn seal_data<Sealable: ?Sized + Serialize>(&mut self, data: &Sealable) -> Result<(), Error>;
+    fn seal_data<Sealable: ?Sized + Serialize>(&mut self, data: &Sealable) -> Result<()>;
 
-    fn unseal_data<T: serde::de::DeserializeOwned>(&mut self) -> Result<T, Error>;
+    fn unseal_data<T: serde::de::DeserializeOwned>(&mut self) -> Result<T>;
 }

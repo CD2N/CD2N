@@ -58,4 +58,17 @@ pub struct SupplierReward {
 pub struct RewardDatabase {
     pub users_supplier_map: HashMap<String, HashMap<String, SupplierReward>>,
 }
+
+impl Default for RewardDatabase {
+    fn default() -> Self {
+        RewardDatabase {
+            users_supplier_map: HashMap::new(),
+        }
+    }
+}
 pub const TOTAL_USER_USED_TRAFFIC: &str = "0x0000000000000000000000000000000000000000";
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct HandoverStatus {
+    pub handover_over: bool,
+}

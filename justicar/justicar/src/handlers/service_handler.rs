@@ -1,20 +1,4 @@
 use super::*;
-use crate::{
-    models::service::{
-        QueryDownloadTraffic, QueryDownloadTrafficResponse, QueryInformationResponse,
-        RewardDatabase, SupplierDataAuditResponse, SupplierReward, TestEcho, TestEchoResponse,
-        TOTAL_USER_USED_TRAFFIC,
-    },
-    utils::seal::Sealing,
-};
-use anyhow::anyhow;
-use axum::{
-    extract::{Multipart, State},
-    http::StatusCode,
-    Json,
-};
-use eth::interact_contract::ContractInteract;
-use log::info;
 use std::collections::HashMap;
 
 pub async fn supplier_data_audit(
@@ -29,6 +13,7 @@ pub async fn supplier_data_audit(
     let mut supplier_acc = String::new();
     let mut request_id = String::new();
     let mut user_sign = Vec::new();
+    system_initialize(state.need_handover.lock().await.clone())?;
 
     while let Some(field) = multipart.next_field().await.unwrap() {
         if let Some(name) = field.name() {
@@ -176,9 +161,9 @@ pub async fn supplier_data_audit(
 
     //Try to decrypt the data with the shared secret
     let data_provider_secp256k1_pubkey = key;
+    let wallet = state.wallet.lock().await.clone();
     let data = if data_provider_secp256k1_pubkey.len() != 0 {
-        let shared_secret = state
-            .wallet
+        let shared_secret = wallet
             .ecdh_agreement(data_provider_secp256k1_pubkey.try_into().map_err(|_| {
                 return_error(
                     anyhow!("Invalid data provider public key,Please have a check"),
@@ -187,9 +172,7 @@ pub async fn supplier_data_audit(
             })?)
             .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
-        println!("shared_secret{:?}", hex::encode(&shared_secret));
-        let data = state
-            .wallet
+        let data = wallet
             .decrypt_data_with_shared_secret_and_nonce(
                 &file_data,
                 shared_secret,
@@ -233,7 +216,7 @@ pub async fn supplier_data_audit(
                     reward_record.total_reward
                 } else {
                     return Err(return_error(
-                        anyhow!("The user's total used traffic is not found in the storage!"),
+                        anyhow!("[🐞]The user's total used traffic is not found in the storage!"),
                         StatusCode::BAD_REQUEST,
                     ));
                 };
@@ -242,9 +225,9 @@ pub async fn supplier_data_audit(
         None => 0,
     };
 
-    let user_total_purchased_traffic = state
-        .contract
-        .get_user_total_traffic(&state.wallet.eth_public_address, &user_acc)
+    let contract = state.contract.lock().await.clone();
+    let user_total_purchased_traffic = contract
+        .get_user_total_traffic(&wallet.eth_public_address, &user_acc)
         .await
         .map_err(|e| {
             return_error(
@@ -264,8 +247,7 @@ pub async fn supplier_data_audit(
         ));
     }
 
-    let latest_block_number = state
-        .contract
+    let latest_block_number = contract
         .get_current_block_number()
         .await
         .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
@@ -336,9 +318,11 @@ pub async fn supplier_data_audit(
 pub async fn query_information(
     State(state): State<CD2NState>,
 ) -> Result<Json<QueryInformationResponse>, AppError> {
+    system_initialize(state.need_handover.lock().await.clone())?;
+    let wallet = state.wallet.lock().await.clone();
     let response = QueryInformationResponse {
-        eth_address: state.wallet.eth_public_address.clone(),
-        secp256k1_public_key: state.wallet.public_key.clone(),
+        eth_address: wallet.eth_public_address.clone(),
+        secp256k1_public_key: wallet.public_key.clone(),
     };
     Ok(Json(response))
 }
@@ -347,9 +331,12 @@ pub async fn download_traffic_query(
     State(state): State<CD2NState>,
     Json(params): Json<QueryDownloadTraffic>,
 ) -> Result<Json<QueryDownloadTrafficResponse>, AppError> {
-    let user_total_purchased_traffic = state
-        .contract
-        .get_user_total_traffic(&state.wallet.eth_public_address, &params.user_eth_address)
+    system_initialize(state.need_handover.lock().await.clone())?;
+    let contract = state.contract.lock().await.clone();
+    let wallet = state.wallet.lock().await.clone();
+
+    let user_total_purchased_traffic = contract
+        .get_user_total_traffic(&wallet.eth_public_address, &params.user_eth_address)
         .await
         .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
@@ -362,7 +349,7 @@ pub async fn download_traffic_query(
     //Get the user's total used traffic
     let user_used_traffic = match previous_seal_data
         .users_supplier_map
-        .get_mut(&state.wallet.eth_public_address)
+        .get_mut(&params.user_eth_address)
     {
         Some(record_map) => {
             let user_used_traffic: i64 =
@@ -370,7 +357,7 @@ pub async fn download_traffic_query(
                     reward_record.total_reward
                 } else {
                     return Err(return_error(
-                        anyhow!("The user's total used traffic is not found in the storage!"),
+                        anyhow!("[🐞]The user's total used traffic is not found in the storage!"),
                         StatusCode::BAD_REQUEST,
                     ));
                 };

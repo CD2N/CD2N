@@ -1,16 +1,12 @@
-use crate::utils::seal::Sealing;
-
 use super::*;
 use anyhow::{anyhow, Context};
 use async_trait::async_trait;
-use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
-use eth::interact_contract::ContractInteract;
 use handover::handover::{
     ExternalStatusGet, HandoverChallenge, HandoverChallengeResponse, HandoverSecretData,
     RemoteAttestation,
 };
 use sgx_attestation::{
-    dcap::{self, report, Quote},
+    dcap,
     types::{AttestationReport, Collateral},
 };
 use std::{collections::HashMap, time::Duration};
@@ -18,8 +14,8 @@ use std::{collections::HashMap, time::Duration};
 #[async_trait]
 impl ExternalStatusGet for CD2NState {
     async fn get_block_number(&self) -> handover::HandoverResult<u64> {
-        Ok(self
-            .contract
+        let contract = self.contract.lock().await.clone();
+        Ok(contract
             .get_current_block_number()
             .await
             .map_err(|e| handover::SgxError::InternalError(e.to_string()))?)
@@ -28,13 +24,12 @@ impl ExternalStatusGet for CD2NState {
     async fn get_mrenclave_update_block_number_map(
         &self,
     ) -> handover::HandoverResult<HashMap<String, u128>> {
-        let mrenclave_list = self
-            .contract
+        let contract = self.contract.lock().await.clone();
+        let mrenclave_list = contract
             .get_mrenclave_list()
             .await
             .map_err(|e| handover::SgxError::InternalError(e.to_string()))?;
-        let update_block_number_list = self
-            .contract
+        let update_block_number_list = contract
             .get_update_block_number()
             .await
             .map_err(|e| handover::SgxError::InternalError(e.to_string()))?;
@@ -47,8 +42,8 @@ impl ExternalStatusGet for CD2NState {
     }
 
     async fn get_mrsigner_list(&self) -> handover::HandoverResult<Vec<String>> {
-        let mrsigner_list = self
-            .contract
+        let contract = self.contract.lock().await.clone();
+        let mrsigner_list = contract
             .get_mrsigner_list()
             .await
             .map_err(|e| handover::SgxError::InternalError(e.to_string()))?;
@@ -195,4 +190,20 @@ pub async fn handover_receive(
         .await
         .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
     Ok(Json(()))
+}
+
+pub async fn set_handover_status(
+    State(state): State<CD2NState>,
+    Json(params): Json<HandoverStatus>,
+) -> Result<Json<()>, AppError> {
+    *state.need_handover.lock().await = params.handover_over;
+    Ok(Json(()))
+}
+
+pub async fn get_handover_status(
+    State(state): State<CD2NState>,
+) -> Result<Json<HandoverStatus>, AppError> {
+    Ok(Json(HandoverStatus {
+        handover_over: state.need_handover.lock().await.clone(),
+    }))
 }

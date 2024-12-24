@@ -16,7 +16,7 @@ async fn main() -> Result<()> {
     let args = Args::parse();
     env_logger::init();
 
-    let cd2n_state = models::CD2NState::new(
+    let cd2n_state = models::CD2NState::new_with_runtime_info_file(
         args.dev_mode,
         args.pccs_url,
         args.ra_timeout,
@@ -29,19 +29,23 @@ async fn main() -> Result<()> {
     // build our application with a route and state
     let app = routes::create_routes(cd2n_state.clone()).await;
 
+    let contract_ref = cd2n_state.contract.clone();
+    let handover_over_ref = cd2n_state.need_handover.clone();
     let periodic_rewards_task: tokio::task::JoinHandle<Result<()>> = tokio::spawn(async move {
         info!("Starting periodic rewards task...");
         periodic_rewards::periodic_rewards(
             args.reward_block_interval,
             cd2n_state.clone().incentive_record_storage,
-            cd2n_state.clone().contract,
+            contract_ref,
+            handover_over_ref,
         )
         .await
     });
 
     // run it
-    let app_task: tokio::task::JoinHandle<Result<()>> = tokio::spawn(async {
-        let listener = tokio::net::TcpListener::bind("0.0.0.0:1309").await?;
+    let port = args.port;
+    let app_task: tokio::task::JoinHandle<Result<()>> = tokio::spawn(async move {
+        let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
 
         info!(
             "app listening on {}",

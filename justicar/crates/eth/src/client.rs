@@ -90,7 +90,7 @@ impl Eth {
             .take(amount);
 
         while let Some(block) = stream.next().await {
-            info!("[⛓️] Received block number: {}", block.header.number);
+            info!("[⛓️ ] Received block number: {}", block.header.number);
         }
 
         Ok(())
