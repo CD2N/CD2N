@@ -8,14 +8,14 @@ pub struct Args {
         long = "server-port",
         help = "Previous node as server, start with server port."
     )]
-    pub server_port: u64,
+    pub server_port: String,
 
     #[arg(
-        default_value = "1309",
+        default_value = "8888",
         long = "client-port",
         help = "New node as client, start with client port."
     )]
-    pub client_port: u64,
+    pub client_port: String,
 
     #[arg(
         long,
@@ -30,13 +30,6 @@ pub struct Args {
         default_value = "/opt/justicar/backups"
     )]
     pub server_version_path: String,
-
-    #[arg(
-        long,
-        help = "The runtime data storage absolute path",
-        default_value = "/opt/justicar/data"
-    )]
-    pub justicar_data_path: String,
 
     #[arg(
         long,

@@ -17,7 +17,7 @@ pub async fn handover_routes(state: CD2NState) -> Router {
         )
         .route(
             "/set_handover_status",
-            post(internal_handler::set_handover_status),
+            put(internal_handler::set_handover_status),
         )
         .route(
             "/get_handover_status",

@@ -9,8 +9,7 @@ use sgx_attestation::{
     dcap,
     types::{AttestationReport, Collateral},
 };
-use std::{collections::HashMap, time::Duration};
-
+use std::{collections::HashMap, net::SocketAddr, time::Duration};
 #[async_trait]
 impl ExternalStatusGet for CD2NState {
     async fn get_block_number(&self) -> handover::HandoverResult<u64> {
@@ -182,21 +181,52 @@ pub async fn handover_receive(
         .await
         .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
-    let secret: Secret = serde_json::from_slice(&handover_secret_data)
+    let mut secret: Secret = serde_json::from_slice(&handover_secret_data)
         .context("Failed to parse json secret")
         .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
-    secret_to_cdn_state(secret, &mut state)
+    secret_to_cdn_state(secret.clone(), &mut state)
         .await
         .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+    //save incentive record file into storage
+    state
+        .incentive_record_storage
+        .lock()
+        .await
+        .seal_data(&secret.reward_database)
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+    //save runtime info file into storage
+    secret.reward_database = RewardDatabase::default();
+    state
+        .runtime_info_storage_path
+        .seal_data(&secret)
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+
     Ok(Json(()))
 }
 
 pub async fn set_handover_status(
-    State(state): State<CD2NState>,
-    Json(params): Json<HandoverStatus>,
+    State(mut state): State<CD2NState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> Result<Json<()>, AppError> {
-    *state.need_handover.lock().await = params.handover_over;
+    if addr.ip().is_loopback() {
+        *state.need_handover.lock().await = false;
+
+        let mut secret = secret_from_cdn_state(state.clone())
+            .await
+            .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+        //save runtime info file into storage
+        secret.reward_database = RewardDatabase::default();
+        state
+            .runtime_info_storage_path
+            .seal_data(&secret)
+            .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+    } else {
+        return Err(return_error(
+            anyhow!("oops..Only loopback address is allowed"),
+            StatusCode::FORBIDDEN,
+        ));
+    }
     Ok(Json(()))
 }
 

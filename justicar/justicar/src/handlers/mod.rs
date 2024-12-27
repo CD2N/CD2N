@@ -14,7 +14,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use axum::{
-    extract::{Multipart, State},
+    extract::{Multipart,ConnectInfo, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     Json,

@@ -5,6 +5,9 @@ edition.workspace = true
 
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
-reqwest = { workspace = true }
+reqwest = { workspace = true, features = ["json"] }
 tokio = { workspace = true, features = ["full"] }
 walkdir = { workspace = true }
+anyhow = { workspace = true }
+handover = { workspace = true }
+serde_json = { workspace = true }

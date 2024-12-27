@@ -9,6 +9,7 @@ use crate::utils::{
 use anyhow::Result;
 use eth::client::Eth;
 use handover::handover::HandoverHandler;
+use log::info;
 use std::{
     collections::HashMap,
     fs::{File, OpenOptions},
@@ -109,6 +110,7 @@ impl CD2NState {
             Ok(data) => data,
             Err(e) => {
                 if e.to_string().contains("No such file or directory") {
+                    info!("[😅]runtime_info file not found,waiting for initialization!");
                     return Ok(state);
                 } else {
                     return Err(e);
@@ -119,6 +121,7 @@ impl CD2NState {
         *state.contract.lock().await =
             Eth::get_contract_conn(&rpc_url, contract_addr.clone(), data.wallet.mnemonic).await?;
         *state.need_handover.lock().await = data.need_handover;
+        info!("[😀]State recovery from runtime info file successfully!");
 
         Ok(state)
     }

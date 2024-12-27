@@ -14,11 +14,11 @@ pub async fn periodic_rewards(
     block_interval: u64,
     incentive_storage: Arc<Mutex<IncentiveRecordStorage>>,
     contract: Arc<Mutex<Eth>>,
-    handover_over: Arc<Mutex<bool>>,
+    need_handover: Arc<Mutex<bool>>,
 ) -> Result<()> {
     let incentive_storage_clone = incentive_storage.clone();
 
-    while !handover_over.lock().await.clone() {
+    while need_handover.lock().await.clone() {
         debug!("[⏳]The program has not yet completed the secret handover, waiting...");
         tokio::time::sleep(std::time::Duration::from_secs(30)).await;
     }

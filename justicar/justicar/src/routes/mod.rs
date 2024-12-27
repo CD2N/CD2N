@@ -4,7 +4,7 @@ use crate::handlers::{internal_handler, service_handler};
 use crate::models::CD2NState;
 use axum::{
     extract::DefaultBodyLimit,
-    routing::{get, post},
+    routing::{get, post,put},
     Router,
 };
 use tower_http::limit::RequestBodyLimitLayer;

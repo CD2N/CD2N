@@ -24,16 +24,7 @@ pub async fn secret_from_cdn_state(cdn: CD2NState) -> Result<Secret> {
     })
 }
 
-pub async fn secret_to_cdn_state(mut secret: Secret, cdn: &mut CD2NState) -> Result<()> {
-    //save incentive record file into storage
-    cdn.incentive_record_storage
-        .lock()
-        .await
-        .seal_data(&secret.reward_database)?;
-    //save runtime info file into storage
-    secret.reward_database = RewardDatabase::default();
-    cdn.runtime_info_storage_path.seal_data(&secret)?;
-
+pub async fn secret_to_cdn_state(secret: Secret, cdn: &mut CD2NState) -> Result<()> {
     //update wallet and contract info into cdn state
     {
         let mut wallet_guard = cdn.wallet.lock().await;
