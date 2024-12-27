@@ -11,6 +11,7 @@ GRAMINE_LOG_LEVEL = error
 USE_MUSL ?= 0
 
 BIN_NAME = justicar
+HANDOVER_BIN_NAME = handover-script
 
 DATA_DIRS = data/seal_data
 
@@ -28,6 +29,7 @@ CARGO_ARGS = --target x86_64-unknown-linux-musl
 HOST_LIBC_DIR = /lib/x86_64-linux-musl
 else
 BIN_FILE = ../../target/release/${BIN_NAME}
+HANDOVER_BIN_FILE = ../../target/release/${HANDOVER_BIN_NAME}
 CARGO_ARGS =
 HOST_LIBC_DIR = /lib/x86_64-linux-gnu
 endif
@@ -39,9 +41,9 @@ endif
 PREFIX ?= ../bin
 
 .PHONY: all
-all: ${BIN_NAME} ${BIN_NAME}.manifest
+all: dirs ${HANDOVER_BIN_NAME} ${BIN_NAME} ${BIN_NAME}.manifest
 ifeq ($(SGX),1)
-all: ${BIN_NAME}.manifest.sgx ${BIN_NAME}.sig
+all: dirs ${HANDOVER_BIN_NAME} ${BIN_NAME}.manifest.sgx ${BIN_NAME}.sig
 endif
 
 .PHONY: ${BIN_FILE}
@@ -50,6 +52,13 @@ ${BIN_FILE}:
 
 ${BIN_NAME}: ${BIN_FILE}
 	cp ${BIN_FILE} ${BIN_NAME}
+
+.PHONY: ${HANDOVER_BIN_FILE}
+${HANDOVER_BIN_FILE}:
+	cargo build -p ${HANDOVER_BIN_NAME} --release
+
+${HANDOVER_BIN_NAME}: ${HANDOVER_BIN_FILE}
+	cp ${HANDOVER_BIN_FILE} ${HANDOVER_BIN_NAME}
 
 ${BIN_NAME}.manifest: ${BIN_NAME}.manifest.template ${LIBOS}
 	gramine-manifest \
@@ -85,6 +94,10 @@ ${BIN_NAME}.token: ${BIN_NAME}.sig
 	gramine-sgx-get-token \
 		--output $@ --sig $<
 
+.PHONY: handover
+handover:
+	cargo build -p handover-script --release
+
 .PHONY: token
 token: ${BIN_NAME}.token
 
@@ -96,7 +109,7 @@ ${DATA_DIRS}:
 
 .PHONY: clean
 clean:
-	$(RM) *.token *.sig *.manifest.sgx *.manifest ${BIN_NAME}.o ${BIN_NAME} OUTPUT
+	$(RM) *.token *.sig *.manifest.sgx *.manifest ${BIN_NAME}.o ${BIN_NAME} OUTPUT ${HANDOVER_BIN_NAME}
 	$(RM) -rf ../target
 	$(RM) -rf data
 	$(RM) -rf ${RUNTIME_DIR}
@@ -107,9 +120,9 @@ distclean: clean
 .PHONY: dist
 dist: all
 	gramine-sgx-sigstruct-view ${BIN_NAME}.sig
-	mkdir -p ${PREFIX}/data/protected_files
-	mkdir -p ${PREFIX}/data/storage_files
+	mkdir -p ${PREFIX}/${DATA_DIRS}
 	cp ${BIN_NAME} ${PREFIX}/
+	cp ${HANDOVER_BIN_FILE} ${PREFIX}/
 ifeq ($(SGX),1)
 	cp ${BIN_NAME}.manifest.sgx ${PREFIX}/
 	cp ${BIN_NAME}.sig ${PREFIX}/

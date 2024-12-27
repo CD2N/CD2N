@@ -110,7 +110,26 @@ impl Wallet {
         Ok(plaintext)
     }
 
-    pub fn sign_data_with_wallet(&self, data: &[u8]) -> Result<[u8; 64]> {
+    pub fn _encrypt_data_with_shared_secret_and_nonce(
+        &self,
+        raw_data: &[u8],
+        secret_data: [u8; 32],
+        iv: &[u8; 12],
+    ) -> Result<Vec<u8>> {
+        let key = Key::<Aes256Gcm>::from_slice(&secret_data);
+        let cipher = Aes256Gcm::new(key);
+        let nonce = Nonce::from_slice(iv);
+
+        let ciphertext = cipher.encrypt(nonce, raw_data).map_err(|e| {
+            anyhow!(
+                "Failed to encrypt data with shared secret because: {:?}",
+                e.to_string()
+            )
+        })?;
+        Ok(ciphertext)
+    }
+
+    pub fn _sign_data_with_wallet(&self, data: &[u8]) -> Result<[u8; 64]> {
         let sk = &SecretKey::from_slice(&self.private_key).context("Invalid my secret key")?;
         let secp = Secp256k1::new();
         let mut hasher = Sha256::new();
@@ -199,6 +218,52 @@ mod tests {
         );
 
         println!("Secret: {:#?}", hex::encode(secret));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_encrpyt_decrypt_data_with_shared_secret_and_nonce() -> Result<()> {
+        let wallet_a = generate_new_wallet()?;
+        let wallet_b = generate_new_wallet()?;
+        let secret = wallet_a.ecdh_agreement(wallet_b.public_key.clone().try_into().unwrap())?;
+
+        println!(
+            "walletA private key: {:#?}",
+            hex::encode(wallet_a.clone().private_key)
+        );
+        println!(
+            "walletA public key: {:#?}",
+            hex::encode(wallet_a.clone().public_key)
+        );
+        println!(
+            "walletB private key: {:#?}",
+            hex::encode(wallet_b.clone().private_key)
+        );
+        println!(
+            "walletB public key: {:#?}",
+            hex::encode(wallet_b.clone().public_key)
+        );
+
+        println!("Secret: {:#?}", hex::encode(secret.clone()));
+
+        let raw_data = b"hello cd2n";
+        let iv = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+
+        let encrypted_data =
+            wallet_a._encrypt_data_with_shared_secret_and_nonce(raw_data, secret.clone(), &iv)?;
+
+        println!(
+            "walletA encrpyted data result: {:?}",
+            hex::encode(encrypted_data.clone())
+        );
+
+        let decrypted_raw_data =
+            wallet_b.decrypt_data_with_shared_secret_and_nonce(&encrypted_data, secret, &iv)?;
+        println!(
+            "walletB decrypted data result: {:?}",
+            String::from_utf8(decrypted_raw_data.clone())?
+        );
 
         Ok(())
     }

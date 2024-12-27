@@ -24,6 +24,9 @@ pub struct Args {
     )]
     pub chain_rpc: String,
 
+    #[arg(default_value = "1309", long = "port", help = "CD2N Tee node port.")]
+    pub port: u64,
+
     #[arg(
         default_value = "/data/seal_data",
         long = "safe_storage_path",

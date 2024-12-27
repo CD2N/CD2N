@@ -228,10 +228,6 @@ impl HandoverHandler {
 
             let server_mrenclave_list = contract.get_mrenclave_update_block_number_map().await?;
 
-            println!(
-                "server_mrenclave_list is :{:?}",
-                server_mrenclave_list.clone()
-            );
             let server_mrenclave_record = server_mrenclave_list
                 .get_key_value(&hex::encode_upper(my_la_report.body.mr_enclave.m));
             let server_mrsigner_list = contract.get_mrsigner_list().await?;

@@ -1,23 +1,20 @@
 use super::*;
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use async_trait::async_trait;
-use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
-use eth::interact_contract::ContractInteract;
 use handover::handover::{
     ExternalStatusGet, HandoverChallenge, HandoverChallengeResponse, HandoverSecretData,
     RemoteAttestation,
 };
 use sgx_attestation::{
-    dcap::{self, report, Quote},
+    dcap,
     types::{AttestationReport, Collateral},
 };
-use std::{collections::HashMap, time::Duration};
-
+use std::{collections::HashMap, net::SocketAddr, time::Duration};
 #[async_trait]
 impl ExternalStatusGet for CD2NState {
     async fn get_block_number(&self) -> handover::HandoverResult<u64> {
-        Ok(self
-            .contract
+        let contract = self.contract.lock().await.clone();
+        Ok(contract
             .get_current_block_number()
             .await
             .map_err(|e| handover::SgxError::InternalError(e.to_string()))?)
@@ -26,13 +23,12 @@ impl ExternalStatusGet for CD2NState {
     async fn get_mrenclave_update_block_number_map(
         &self,
     ) -> handover::HandoverResult<HashMap<String, u128>> {
-        let mrenclave_list = self
-            .contract
+        let contract = self.contract.lock().await.clone();
+        let mrenclave_list = contract
             .get_mrenclave_list()
             .await
             .map_err(|e| handover::SgxError::InternalError(e.to_string()))?;
-        let update_block_number_list = self
-            .contract
+        let update_block_number_list = contract
             .get_update_block_number()
             .await
             .map_err(|e| handover::SgxError::InternalError(e.to_string()))?;
@@ -45,8 +41,8 @@ impl ExternalStatusGet for CD2NState {
     }
 
     async fn get_mrsigner_list(&self) -> handover::HandoverResult<Vec<String>> {
-        let mrsigner_list = self
-            .contract
+        let contract = self.contract.lock().await.clone();
+        let mrsigner_list = contract
             .get_mrsigner_list()
             .await
             .map_err(|e| handover::SgxError::InternalError(e.to_string()))?;
@@ -114,7 +110,9 @@ impl RemoteAttestation for RA {
     }
 }
 
-pub async fn generate_challenge(State(state): State<CD2NState>) -> impl IntoResponse {
+pub async fn generate_challenge(
+    State(state): State<CD2NState>,
+) -> Result<Json<HandoverChallenge>, AppError> {
     let challenge = state
         .handover_handler
         .clone()
@@ -122,14 +120,14 @@ pub async fn generate_challenge(State(state): State<CD2NState>) -> impl IntoResp
         .await
         .generate_challenge(&state.clone())
         .await
-        .unwrap();
-    (StatusCode::OK, Json(challenge))
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+    Ok(Json(challenge))
 }
 
 pub async fn handover_accept_challenge(
     State(state): State<CD2NState>,
     Json(params): Json<HandoverChallenge>,
-) -> impl IntoResponse {
+) -> Result<Json<HandoverChallengeResponse>, AppError> {
     let ra = RA {};
     let handover_challenge_response = state
         .handover_handler
@@ -138,19 +136,25 @@ pub async fn handover_accept_challenge(
         .await
         .handover_accept_challenge(params, &ra)
         .await
-        .unwrap();
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
-    (StatusCode::OK, Json(handover_challenge_response))
+    Ok(Json(handover_challenge_response))
 }
 
 pub async fn handover_start(
     State(state): State<CD2NState>,
     Json(params): Json<HandoverChallengeResponse>,
-) -> impl IntoResponse {
+) -> Result<Json<HandoverSecretData>, AppError> {
     let ra = RA {};
-    let secret = state.wallet.clone();
+    let secret = secret_from_cdn_state(state.clone())
+        .await
+        .context("Get secret from cdn state failed")
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
-    let secret_data = serde_json::to_vec(&secret).unwrap();
+    let secret_data = serde_json::to_vec(&secret)
+        .context("serde secret to json failed")
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+
     let handover_secret_data = state
         .handover_handler
         .clone()
@@ -158,15 +162,15 @@ pub async fn handover_start(
         .await
         .handover_start(secret_data, params, &ra, &state)
         .await
-        .unwrap();
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
-    (StatusCode::OK, Json(handover_secret_data))
+    Ok(Json(handover_secret_data))
 }
 
 pub async fn handover_receive(
     State(mut state): State<CD2NState>,
     Json(params): Json<HandoverSecretData>,
-) -> impl IntoResponse {
+) -> Result<Json<()>, AppError> {
     let ra = RA {};
     let handover_secret_data = state
         .handover_handler
@@ -175,10 +179,61 @@ pub async fn handover_receive(
         .await
         .handover_receive(params, &ra, &state)
         .await
-        .unwrap();
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
-    let wallet: Wallet = serde_json::from_slice(&handover_secret_data).unwrap();
+    let mut secret: Secret = serde_json::from_slice(&handover_secret_data)
+        .context("Failed to parse json secret")
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
 
-    state.wallet = wallet;
-    StatusCode::OK
+    secret_to_cdn_state(secret.clone(), &mut state)
+        .await
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+    //save incentive record file into storage
+    state
+        .incentive_record_storage
+        .lock()
+        .await
+        .seal_data(&secret.reward_database)
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+    //save runtime info file into storage
+    secret.reward_database = RewardDatabase::default();
+    state
+        .runtime_info_storage_path
+        .seal_data(&secret)
+        .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+
+    Ok(Json(()))
+}
+
+pub async fn set_handover_status(
+    State(mut state): State<CD2NState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+) -> Result<Json<()>, AppError> {
+    if addr.ip().is_loopback() {
+        *state.need_handover.lock().await = false;
+
+        let mut secret = secret_from_cdn_state(state.clone())
+            .await
+            .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+        //save runtime info file into storage
+        secret.reward_database = RewardDatabase::default();
+        state
+            .runtime_info_storage_path
+            .seal_data(&secret)
+            .map_err(|e| return_error(e, StatusCode::INTERNAL_SERVER_ERROR))?;
+    } else {
+        return Err(return_error(
+            anyhow!("oops..Only loopback address is allowed"),
+            StatusCode::FORBIDDEN,
+        ));
+    }
+    Ok(Json(()))
+}
+
+pub async fn get_handover_status(
+    State(state): State<CD2NState>,
+) -> Result<Json<HandoverStatus>, AppError> {
+    Ok(Json(HandoverStatus {
+        handover_over: state.need_handover.lock().await.clone(),
+    }))
 }

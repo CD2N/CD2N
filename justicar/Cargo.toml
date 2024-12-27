@@ -1,5 +1,5 @@
 [workspace]
-members = ["justicar", "crates/*"]
+members = ["justicar", "crates/*", "scripts/handover-script"]
 resolver = "2"
 
 [workspace.package]
@@ -51,6 +51,7 @@ webpki = { git = "https://github.com/rustls/webpki", version = "=0.102.0-alpha.3
     "alloc",
     "ring",
 ], rev = "2ed9a4324f48c2c46ffdd7dc9d3eb315af25fce2" }
+walkdir = "2.5.0"
 alloy = { version = "0.5.3", features = [
     "full",
     "node-bindings",
