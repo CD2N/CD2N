@@ -11,7 +11,7 @@ pub struct Args {
     pub server_port: String,
 
     #[arg(
-        default_value = "8888",
+        default_value = "1309",
         long = "client-port",
         help = "New node as client, start with client port."
     )]
