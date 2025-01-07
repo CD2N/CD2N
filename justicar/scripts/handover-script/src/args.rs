@@ -44,4 +44,7 @@ pub struct Args {
         default_value = "/tmp/new_justicar.log"
     )]
     pub client_justicar_log_path: String,
+
+    #[arg(long, help = "Chain rpc url.", default_value = "ws://127.0.0.1:9944")]
+    pub chain_rpc: String,
 }

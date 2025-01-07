@@ -14,7 +14,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use axum::{
-    extract::{Multipart,ConnectInfo, State},
+    extract::{ConnectInfo, Multipart, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     Json,
@@ -36,7 +36,7 @@ where
 }
 
 pub fn system_initialize(handover_over: bool) -> Result<(), AppError> {
-    if handover_over {
+    if !handover_over {
         return Ok(());
     }
 

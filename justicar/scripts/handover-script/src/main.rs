@@ -90,6 +90,7 @@ async fn main() -> Result<()> {
     let mut client_process = start_justicar(
         path::Path::new(&args.client_version_path).to_path_buf(),
         &args.client_port,
+        &args.chain_rpc,
     )
     .await?;
     redirect_log(
@@ -114,6 +115,7 @@ async fn main() -> Result<()> {
     let mut server_process = start_justicar(
         path::Path::new(&args.server_version_path).join(server_version.to_string()),
         &args.server_port,
+        &args.chain_rpc,
     )
     .await?;
     redirect_log(
@@ -150,8 +152,12 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-pub async fn start_justicar(program_path: PathBuf, port: &String) -> Result<Child> {
-    let extra_args: &[&str] = &vec!["--port", port];
+pub async fn start_justicar(
+    program_path: PathBuf,
+    port: &String,
+    chain_rpc: &String,
+) -> Result<Child> {
+    let extra_args: &[&str] = &vec!["--port", port, "--chain-rpc", chain_rpc];
 
     let mut cmd = Command::new(program_path.join("start_justicar.sh"));
     cmd.stdin(Stdio::piped())
