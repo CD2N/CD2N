@@ -28,8 +28,8 @@ ARG APP_RELEASE_DIR="${APP_BASE_DIR}/release/${ENV_NAME}"
 
 RUN mkdir -p ${APP_RELEASE_DIR}
 COPY --from=builder ${APP_BASE_DIR} ${APP_RELEASE_DIR}
-ADD dockerfile/start_justicar.sh ${APP_RELEASE_DIR}/start_justicar.sh
-ADD dockerfile/start_handover.sh ${APP_BASE_DIR}/start_handover.sh
+ADD scripts/start_justicar.sh ${APP_RELEASE_DIR}/start_justicar.sh
+ADD scripts/start_handover.sh ${APP_BASE_DIR}/start_handover.sh
 ADD dockerfile/conf /opt/conf
 
 RUN mv ${APP_RELEASE_DIR}/handover-script ${APP_BASE_DIR}

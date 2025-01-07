@@ -47,6 +47,7 @@ if [ -d "./release" ]; then
         # judge if the filename is a number
         if [ -d "./backups/$filename" ]; then
             echo "found backups directory have same version name with release folder:$filename"
+            ln -s "./backups/$filename" "./current"
             break
         else
             echo "new release version, move new version $filename -> backups"
@@ -61,6 +62,6 @@ else
 fi
 
 rm -rf ./release
-./handover-script
+./handover-script $EXTRA_OPTS
 cd ./current
 sh ./start_justicar.sh
