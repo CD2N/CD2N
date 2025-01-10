@@ -9,7 +9,6 @@ import (
 	"github.com/CD2N/CD2N/retriever/libs/client"
 	"github.com/CD2N/CD2N/retriever/server/auth"
 	"github.com/CD2N/CD2N/retriever/server/handles"
-	"github.com/CD2N/CD2N/retriever/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -106,7 +105,7 @@ func RegisterHandles(router *gin.Engine, h *handles.ServerHandle) {
 
 	gateway := router.Group("/gateway")
 	gateway.Use(TokenVerify)
-	gateway.POST("/login", Login)
+	gateway.POST("/gentoken", h.GenToken)
 	gateway.GET("/getinfo/:segment", h.GetDataInfo)
 	gateway.HEAD("/download/:fid/:segment", h.DownloadUserFile)
 	gateway.GET("/download/:fid", h.DownloadUserFile)
@@ -115,27 +114,4 @@ func RegisterHandles(router *gin.Engine, h *handles.ServerHandle) {
 	gateway.POST("/part-upload", h.RequestPartsUpload)
 	gateway.POST("/upload/part", h.UploadFileParts)
 
-}
-
-func Login(c *gin.Context) {
-	cessAcc := c.PostForm("account")
-	if cessAcc == "" {
-		resp := client.NewResponse(http.StatusBadRequest, "login error", "bad user account")
-		c.JSON(resp.Code, resp)
-		return
-	}
-	account, err := utils.ParsingPublickey(cessAcc)
-	if err != nil {
-		resp := client.NewResponse(http.StatusBadRequest, "login error", err.Error())
-		c.JSON(resp.Code, resp)
-		return
-	}
-	token, err := auth.Jwth().GenerateToken(auth.UserInfo{Account: account})
-	if err != nil {
-		resp := client.NewResponse(http.StatusInternalServerError, "login error", err.Error())
-		c.JSON(resp.Code, resp)
-		return
-	}
-	resp := client.NewResponse(http.StatusOK, "success", token)
-	c.JSON(resp.Code, resp)
 }

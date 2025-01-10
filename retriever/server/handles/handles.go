@@ -227,12 +227,16 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 	return nil
 }
 
-func (h *ServerHandle) RechargeGasFeeForTEE(addr string, conf config.Config) error {
+func ConvertPubkey(addr string) []byte {
 	bytesAddr := common.HexToAddress(addr).Bytes()
 	data := append([]byte("evm:"), bytesAddr...)
 	hashed := blake2b.Sum256(data)
-	cessAcc := subkey.SS58Encode(hashed[:], uint16(conf.ChainId))
+	return hashed[:]
+}
 
+func (h *ServerHandle) RechargeGasFeeForTEE(addr string, conf config.Config) error {
+	hashed := ConvertPubkey(addr)
+	cessAcc := subkey.SS58Encode(hashed[:], uint16(conf.ChainId))
 	cli, err := chain.NewCessChainClient(context.Background(), conf.Mnemonic, conf.Rpcs)
 	if err != nil {
 		return errors.Wrap(err, "check and transfer gas free error")
