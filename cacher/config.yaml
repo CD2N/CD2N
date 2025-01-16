@@ -25,7 +25,7 @@ MinerConfigPath: "/opt/cess/mineradm/config.yaml"
 # it will automatically connect to some publicly available retriever nodes to get more opportunities to get rewards.
 CdnNodes:
   - Account: "0xb7B43408864aEa0449D8F813380f8ec424F7a775" 
-    Endpoint: "http://46.250.249.195:1306" 
+    Endpoint: "http://154.194.34.195:1306" 
 
 # You can also manually import storage nodes through the following configuration. 
 # The cacher will automatically check the availability of the storage node and complete other information from the chain.
