@@ -376,3 +376,12 @@ func TestWalk(t *testing.T) {
 	}
 	t.Log("success")
 }
+
+func TestConnRedis(t *testing.T) {
+	redisCli := client.NewRedisClient("127.0.0.1:6379", "retriever", "")
+	err := client.PublishMessage(redisCli, context.Background(), "test", "test data")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("success")
+}

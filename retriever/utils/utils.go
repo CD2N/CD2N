@@ -121,37 +121,20 @@ func VerityAddress(address string, prefix []byte) error {
 }
 
 func SignedSR25519WithMnemonic(mnemonic string, msg string) ([]byte, error) {
-	if len(msg) <= 0 {
-		return nil, errors.New("SignedSR25519WithMnemonic: empty msg")
-	}
+
 	pri, err := sr25519.Scheme{}.FromPhrase(mnemonic, "")
 	if err != nil {
-		return nil, errors.New("SignedSR25519WithMnemonic: invalid mnemonic")
+		return nil, errors.New("invalid mnemonic")
 	}
 	return pri.Sign([]byte(msg))
 }
 
-// VerifySR25519WithPublickey verify sr25519 signature with account public key
-//   - msg: message
-//   - sign: sr25519 signature
-//   - account: polkadot account
-//
-// Return:
-//   - bool: verification result
-//   - error: error message
-func VerifySR25519WithPublickey(msg string, sign []byte, account string) (bool, error) {
-	if len(sign) <= 0 {
-		return false, errors.New("VerifySR25519WithPublickey: empty sign")
-	}
-	pk, err := ParsingPublickey(account)
-	if err != nil {
-		return false, errors.New("VerifySR25519WithPublickey: invalid account")
-	}
-	public, err := sr25519.Scheme{}.FromPublicKey(pk)
+func VerifySR25519WithPublickey(msg, sign, pubkey []byte) (bool, error) {
+	public, err := sr25519.Scheme{}.FromPublicKey(pubkey)
 	if err != nil {
 		return false, err
 	}
-	ok := public.Verify([]byte(msg), sign)
+	ok := public.Verify(msg, sign)
 	return ok, err
 }
 

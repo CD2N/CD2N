@@ -223,10 +223,6 @@ func cmd_run_func(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	if err = mg.LoadCdnNodes(conf); err != nil {
-		log.Println("load CD2N nodes error", err)
-	}
-
 	if err = mg.LoadStorageNodes(conf); err != nil {
 		log.Println("load storage nodes error", err)
 		return
@@ -255,10 +251,21 @@ func cmd_run_func(cmd *cobra.Command, args []string) {
 
 	taskCh := make(chan *redis.Message, 10240)
 	go func() {
-		if err := mg.SubscribeMessageFromCdnNodes(ctx, taskCh, client.CHANNEL_PROVIDE, client.CHANNEL_RETRIEVE); err != nil {
-			log.Println("run subscribe task server error", err)
-			stop()
-			return
+		ticker := time.NewTicker(time.Minute * 15)
+		for {
+			if err = mg.LoadCdnNodes(conf); err != nil {
+				log.Println("run subscribe task server error", err)
+				time.Sleep(time.Minute)
+				continue
+			}
+			if err := mg.SubscribeMessageFromCdnNodes(ctx, taskCh, client.CHANNEL_PROVIDE, client.CHANNEL_RETRIEVE); err != nil {
+				log.Println("run subscribe task server error", err)
+			}
+			select {
+			case <-ticker.C:
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 

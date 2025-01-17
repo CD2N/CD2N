@@ -429,7 +429,7 @@ func (m *ProvideManager) LoadCdnNodes(conf config.Config) error {
 			Endpoint: cdn.Endpoint,
 		}
 		node.Available = CheckNodeAvailable(&node)
-		m.cdnNodes.Store(cdn.Account, node)
+		m.cdnNodes.LoadOrStore(cdn.Account, node)
 	}
 	var index int64
 	for {
@@ -449,7 +449,7 @@ func (m *ProvideManager) LoadCdnNodes(conf config.Config) error {
 			Endpoint: info.Endpoint,
 		}
 		node.Available = CheckNodeAvailable(&node)
-		m.cdnNodes.Store(node.Account, node)
+		m.cdnNodes.LoadOrStore(node.Account, node)
 	}
 	return nil
 }
@@ -492,10 +492,11 @@ func (m *ProvideManager) UpdateStorageNodeStatus(ctx context.Context, conf confi
 func (m *ProvideManager) SubscribeMessageFromCdnNodes(ctx context.Context, taskCh chan<- *redis.Message, channels ...string) error {
 	m.cdnNodes.Range(func(key, value any) bool {
 		node := value.(CdnNode)
-		node.redisCli = client.NewRedisClient(node.RedisAddress, "provider", "cd2n.provider")
-		ants.Submit(func() { client.SubscribeMessage(node.redisCli, ctx, taskCh, channels...) })
-		node.Available = true
-		m.cdnNodes.Store(key, node)
+		if node.RedisAddress != "" && node.redisCli == nil {
+			node.redisCli = client.NewRedisClient(node.RedisAddress, "provider", "cd2n.provider")
+			ants.Submit(func() { client.SubscribeMessage(node.redisCli, ctx, taskCh, channels...) })
+			m.cdnNodes.Store(key, node)
+		}
 		return true
 	})
 	return nil

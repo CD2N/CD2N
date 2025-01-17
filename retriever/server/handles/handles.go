@@ -3,7 +3,6 @@ package handles
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"log"
 	"math/big"
 	"net/http"
@@ -136,7 +135,7 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 		return errors.Wrap(err, "init handles runtime error")
 	}
 
-	redisCli := client.NewRedisClient(fmt.Sprintf("localhost:%d", conf.RedisPort), conf.RedisPwd)
+	redisCli := client.NewRedisClient(conf.RedisLoacl, "retriever", conf.RedisPwd)
 
 	h.buffer, err = buffer.NewFileBuffer(
 		uint64(conf.FileBufferSize),
@@ -227,12 +226,16 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 	return nil
 }
 
-func (h *ServerHandle) RechargeGasFeeForTEE(addr string, conf config.Config) error {
+func ConvertPubkey(addr string) []byte {
 	bytesAddr := common.HexToAddress(addr).Bytes()
 	data := append([]byte("evm:"), bytesAddr...)
 	hashed := blake2b.Sum256(data)
-	cessAcc := subkey.SS58Encode(hashed[:], uint16(conf.ChainId))
+	return hashed[:]
+}
 
+func (h *ServerHandle) RechargeGasFeeForTEE(addr string, conf config.Config) error {
+	hashed := ConvertPubkey(addr)
+	cessAcc := subkey.SS58Encode(hashed[:], uint16(conf.ChainId))
 	cli, err := chain.NewCessChainClient(context.Background(), conf.Mnemonic, conf.Rpcs)
 	if err != nil {
 		return errors.Wrap(err, "check and transfer gas free error")
