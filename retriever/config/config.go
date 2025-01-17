@@ -1,6 +1,9 @@
 package config
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v2"
@@ -44,12 +47,11 @@ type ServerConfig struct {
 	Debug         bool
 	IpfsAddress   string //ifps host:port
 	RedisAddress  string //redis host:port
+	RedisLoacl    string
 	TeeAddress    string
 	Endpoint      string
 	RedisPwd      string
 	SvcPort       int
-	//TeePort       int
-	RedisPort int
 }
 
 const (
@@ -150,6 +152,13 @@ func InitConfig() error {
 	}
 	if conf.ChainId == 0 {
 		conf.ChainId = DEFAULT_CHAINID
+	}
+	if conf.RedisLoacl == "" {
+		s := strings.Split(conf.RedisAddress, ":")
+		if len(s) < 2 {
+			conf.RedisLoacl = "redis_host:6379"
+		}
+		conf.RedisLoacl = fmt.Sprintf("redis_host:%s", s[len(s)-1])
 	}
 	return nil
 }

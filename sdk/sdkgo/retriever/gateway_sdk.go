@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	"github.com/vedhavyas/go-subkey/sr25519"
 )
 
 const (
@@ -51,21 +52,36 @@ type PartsInfo struct {
 	UpdateDate time.Time `json:"update_date,omitempty"`
 }
 
+func SignedSR25519WithMnemonic(mnemonic string, msg []byte) ([]byte, error) {
+
+	pri, err := sr25519.Scheme{}.FromPhrase(mnemonic, "")
+	if err != nil {
+		return nil, errors.New("invalid mnemonic")
+	}
+	return pri.Sign(msg)
+}
+
 func GenGatewayAccessToken(baseUrl, message, account string, sign []byte) (string, error) {
 	var (
 		token  string
 		err    error
-		buffer bytes.Buffer
+		buffer *bytes.Buffer
 	)
-	writer := multipart.NewWriter(&buffer)
-	writer.WriteField("account", account)
-	writer.WriteField("message", message)
-	writer.WriteField("sign", hex.EncodeToString(sign))
+	data := url.Values{
+		"account": {account},
+		"message": {message},
+		"sign":    {hex.EncodeToString(sign)},
+	}
+	dataString := data.Encode()
+	buffer = bytes.NewBufferString(dataString)
 	u, err := url.JoinPath(baseUrl, GATEWAY_GENTOKEN_URL)
 	if err != nil {
 		return token, errors.Wrap(err, "gen gateway access token error")
 	}
-	body, err := SendHttpRequest(http.MethodPost, u, map[string]string{}, &buffer)
+	headers := map[string]string{
+		"Content-Type": "application/x-www-form-urlencoded",
+	}
+	body, err := SendHttpRequest(http.MethodPost, u, headers, buffer)
 	if err != nil {
 		return token, errors.Wrap(err, "gen gateway access token error")
 	}
@@ -100,7 +116,7 @@ func UploadFile(baseUrl, token, territory, filename string, file io.Reader) (str
 	}
 	headers := map[string]string{
 		"Content-Type": writer.FormDataContentType(),
-		"token":        fmt.Sprintf("Bear %s", token),
+		"token":        fmt.Sprintf("Bearer %s", token),
 	}
 	u, err := url.JoinPath(baseUrl, GATEWAY_UPLOADFILE_URL)
 	if err != nil {

@@ -16,9 +16,10 @@ const (
 	CHANNEL_RETRIEVE = "retrieve_task"
 )
 
-func NewRedisClient(addr, password string) *redis.Client {
+func NewRedisClient(addr, username,password string) *redis.Client {
 	client := redis.NewClient(&redis.Options{
 		Addr:     addr,
+		Username: username,
 		Password: password,
 		DB:       0,
 	})

@@ -3,7 +3,6 @@ package handles
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"log"
 	"math/big"
 	"net/http"
@@ -136,7 +135,7 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 		return errors.Wrap(err, "init handles runtime error")
 	}
 
-	redisCli := client.NewRedisClient(fmt.Sprintf("localhost:%d", conf.RedisPort), conf.RedisPwd)
+	redisCli := client.NewRedisClient(conf.RedisLoacl, "retriever", conf.RedisPwd)
 
 	h.buffer, err = buffer.NewFileBuffer(
 		uint64(conf.FileBufferSize),

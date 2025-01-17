@@ -47,7 +47,7 @@ func DebugHandle(c *gin.Context) {
 }
 
 func TokenVerify(c *gin.Context) {
-	if strings.Contains(c.Request.RequestURI, "/login") {
+	if strings.Contains(c.Request.RequestURI, "/gentoken") {
 		c.Next()
 		return
 	}
