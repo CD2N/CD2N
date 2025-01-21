@@ -67,7 +67,7 @@ type ProvideManager struct {
 	cacher.FileCache
 	storagers *sync.Map
 	cdnNodes  *sync.Map
-	missFiles *sync.Map
+	staskMap  *sync.Map
 	taskChan  chan<- FileTask
 	//fileMg    *FileManager
 	cli  *chain.CacheProtoContract
@@ -86,7 +86,7 @@ func NewProvideManager(c cacher.FileCache, ch chan<- FileTask, cli *chain.CacheP
 		cli:       cli,
 		storagers: &sync.Map{},
 		cdnNodes:  &sync.Map{},
-		missFiles: &sync.Map{},
+		staskMap:  &sync.Map{},
 		temp:      tempDir,
 	}, nil
 }
@@ -181,6 +181,7 @@ func (m *ProvideManager) StorageTaskCallback(e Event) {
 				logger.GetLogger(config.LOG_TASK).Error(e.Error())
 				return
 			}
+			m.CopyAndStoreStorageTask(task)
 		}
 		m.taskChan <- task
 		return
@@ -197,12 +198,65 @@ func (m *ProvideManager) StorageTaskCallback(e Event) {
 			logger.GetLogger(config.LOG_TASK).Infof("task %s done, fid: %s", task.Tid, task.Fid)
 			return
 		}
-		m.FileCache.MoveFileToCache(task.Did, task.Path)
+		if fpath, err := m.FileCache.GetCacheRecord(task.Did); err != nil || fpath == "" {
+			m.FileCache.MoveFileToCache(task.Did, task.Path)
+		}
 		task.Did = task.Fragments[0]
 		task.Path = path.Join(m.temp, task.Fid, task.Did)
 		task.Fragments = task.Fragments[1:]
 		task.TaskType = TYPE_RETRIEVE
 		m.taskChan <- task
+	}
+}
+
+func (m *ProvideManager) CopyAndStoreStorageTask(ft *FileStorageTask) {
+	newFt := &FileStorageTask{
+		Task:      ft.Task,
+		Callback:  ft.Callback,
+		TaskType:  ft.TaskType,
+		Endpoint:  ft.Endpoint,
+		Fid:       ft.Fid,
+		Count:     ft.Count,
+		Fragments: ft.Fragments,
+	}
+	m.staskMap.LoadOrStore(ft.Tid, newFt)
+}
+
+func (m *ProvideManager) StorageTaskChecker(ctx context.Context) error {
+	ticker := time.NewTicker(time.Minute * 15)
+	for {
+		select {
+		case <-ticker.C:
+			chainCli, err := chain.NewCessChainClient(context.Background(), config.GetConfig().Rpcs)
+			if err != nil {
+				logger.GetLogger(config.LOG_NODE).Error("new cess chain client error", err)
+				continue
+			}
+			m.staskMap.Range(func(key, value any) bool {
+				task := value.(*FileStorageTask)
+				order, err := chainCli.QueryDealMap(task.Fid, -1)
+				if err != nil {
+					logger.GetLogger(config.LOG_NODE).Error("check storage order error", err)
+					return true
+				}
+				for _, c := range order.CompleteList {
+					acc, _ := utils.EncodePublicKeyAsCessAccount(c.Miner[:])
+					if acc == task.MinerAcc {
+						m.staskMap.Delete(key)
+						return true
+					}
+				}
+				task.Endpoint, err = m.GetMinerEndpoint(task.Token+"tag:redistribution", uint64(task.Count))
+				if err != nil {
+					logger.GetLogger(config.LOG_NODE).Error("check storage order error", err)
+					return true
+				}
+				m.taskChan <- task
+				return true
+			})
+		case <-ctx.Done():
+			return errors.New("context done")
+		}
 	}
 }
 
@@ -264,7 +318,7 @@ func (m *ProvideManager) GetFileInfo(did, fid string) (FileInfo, error) {
 			}
 			minerAcc, err := utils.EncodePublicKeyAsCessAccount(frag.Miner[:])
 			if err != nil {
-				logger.GetLogger(config.LOG_TASK).Error("encode miner pubkey error ", err)
+				logger.GetLogger(config.LOG_NODE).Error("encode miner pubkey error ", err)
 				continue
 			}
 			if _, ok := m.storagers.Load(minerAcc); ok {
