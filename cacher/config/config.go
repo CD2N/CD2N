@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/CD2N/CD2N/cacher/logger"
+	"github.com/CD2N/CD2N/cacher/utils"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
@@ -37,6 +38,7 @@ type Config struct {
 	StorageNodes    []Node   `json:"storage_nodes"`
 	GasFreeCap      int64
 	GasLimit        uint64
+	Network         uint16
 }
 
 type Node struct {
@@ -125,6 +127,9 @@ func InitDefaultConfig(path string) error {
 	}
 	if conf.SecretKey != "" {
 		return nil
+	}
+	if conf.Network == 0 {
+		conf.Network = utils.TESTNET_FORMAT
 	}
 	key, err := crypto.GenerateKey()
 	if err != nil {

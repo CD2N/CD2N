@@ -181,7 +181,7 @@ func (m *ProvideManager) StorageTaskCallback(e Event) {
 				logger.GetLogger(config.LOG_TASK).Error(e.Error())
 				return
 			}
-			m.CopyAndStoreStorageTask(task)
+			//m.CopyAndStoreStorageTask(task)
 		}
 		m.taskChan <- task
 		return
@@ -223,6 +223,7 @@ func (m *ProvideManager) CopyAndStoreStorageTask(ft *FileStorageTask) {
 }
 
 func (m *ProvideManager) StorageTaskChecker(ctx context.Context) error {
+	net := config.GetConfig().Network
 	ticker := time.NewTicker(time.Minute * 15)
 	for {
 		select {
@@ -240,7 +241,7 @@ func (m *ProvideManager) StorageTaskChecker(ctx context.Context) error {
 					return true
 				}
 				for _, c := range order.CompleteList {
-					acc, _ := utils.EncodePublicKeyAsCessAccount(c.Miner[:])
+					acc := utils.EncodePubkey(c.Miner[:], net)
 					if acc == task.MinerAcc {
 						m.staskMap.Delete(key)
 						return true
@@ -254,6 +255,7 @@ func (m *ProvideManager) StorageTaskChecker(ctx context.Context) error {
 				m.taskChan <- task
 				return true
 			})
+			chainCli.Close()
 		case <-ctx.Done():
 			return errors.New("context done")
 		}
@@ -291,7 +293,7 @@ func (m *ProvideManager) GetMinerEndpoint(token string, count uint64) (Endpoint,
 	return endpoint, nil
 }
 
-func (m *ProvideManager) GetFileInfo(did, fid string) (FileInfo, error) {
+func (m *ProvideManager) GetFileInfo(did, fid string, net uint16) (FileInfo, error) {
 	var finfo FileInfo
 	err := client.GetData(m.files, did, &finfo)
 	if err != nil {
@@ -316,11 +318,7 @@ func (m *ProvideManager) GetFileInfo(did, fid string) (FileInfo, error) {
 			if string(frag.Hash[:]) != did {
 				continue
 			}
-			minerAcc, err := utils.EncodePublicKeyAsCessAccount(frag.Miner[:])
-			if err != nil {
-				logger.GetLogger(config.LOG_NODE).Error("encode miner pubkey error ", err)
-				continue
-			}
+			minerAcc := utils.EncodePubkey(frag.Miner[:], net)
 			if _, ok := m.storagers.Load(minerAcc); ok {
 				finfo.Fid = fid
 				finfo.Storager = minerAcc
@@ -332,6 +330,7 @@ func (m *ProvideManager) GetFileInfo(did, fid string) (FileInfo, error) {
 }
 
 func (m *ProvideManager) ExecuteTasks(ctx context.Context, taskCh <-chan *redis.Message) error {
+	net := config.GetConfig().Network
 	for {
 		select {
 		case <-ctx.Done():
@@ -366,7 +365,7 @@ func (m *ProvideManager) ExecuteTasks(ctx context.Context, taskCh <-chan *redis.
 				}
 				cdnNode := nv.(CdnNode)
 
-				finfo, err := m.GetFileInfo(taskPld.Did, taskPld.ExtData)
+				finfo, err := m.GetFileInfo(taskPld.Did, taskPld.ExtData, net)
 				if err != nil {
 					logger.GetLogger(config.LOG_TASK).Error(err.Error())
 					continue
@@ -447,11 +446,7 @@ func (m *ProvideManager) LoadStorageNodes(conf config.Config) error {
 			logger.GetLogger(config.LOG_NODE).Error(err.Error())
 			continue
 		}
-		acc, err := utils.EncodePublicKeyAsCessAccount(keyring.PublicKey)
-		if err != nil {
-			logger.GetLogger(config.LOG_NODE).Error(err.Error())
-			continue
-		}
+		acc := utils.EncodePubkey(keyring.PublicKey, conf.Network)
 		if _, ok := m.storagers.Load(acc); ok {
 			continue
 		}
@@ -482,8 +477,16 @@ func (m *ProvideManager) LoadCdnNodes(conf config.Config) error {
 			Account:  cdn.Account,
 			Endpoint: cdn.Endpoint,
 		}
-		node.Available = CheckNodeAvailable(&node)
-		m.cdnNodes.LoadOrStore(cdn.Account, node)
+		ava := CheckNodeAvailable(&node)
+		node.Available = ava
+		actl, ok := m.cdnNodes.LoadOrStore(cdn.Account, node)
+		if ok {
+			node = actl.(CdnNode)
+			if !node.Available && ava {
+				node.Available = true
+				m.cdnNodes.Store(cdn.Account, node)
+			}
+		}
 	}
 	var index int64
 	for {

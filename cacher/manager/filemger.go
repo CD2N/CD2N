@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/CD2N/CD2N/cacher/client"
+	"github.com/CD2N/CD2N/cacher/config"
 	"github.com/CD2N/CD2N/cacher/utils"
 	"github.com/CESSProject/cess-go-tools/cacher"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
@@ -72,10 +73,9 @@ func NewFileManager(sk string, cache cacher.FileCache, csize int, selfless bool)
 	if err != nil {
 		return nil, errors.Wrap(err, "new file manager error")
 	}
-	acc, err := utils.EncodePublicKeyAsCessAccount(keypair.PublicKey)
-	if err != nil {
-		return nil, errors.Wrap(err, "new file manager error")
-	}
+
+	acc := utils.EncodePubkey(keypair.PublicKey, config.GetConfig().Network)
+
 	sign, err := utils.SignedSR25519WithMnemonic(keypair.URI, msg)
 	if err != nil {
 		return nil, errors.Wrap(err, "new file manager error")
@@ -289,13 +289,13 @@ func (t *FileStorageTask) FetchFile(fmg *FileManager) {
 		return
 	}
 	// get data from cache
-	if fpath, err := fmg.GetCacheRecord(t.Did); err == nil && fpath != "" {
-		t.Path = fpath
-		t.Callback(client.NewResponse(200, "success", t))
-		return
-	} else if t.Token == "" {
-		t.Callback(client.NewResponse(400, "retrieving local data but not hitting cache", t))
-	}
+	// if fpath, err := fmg.GetCacheRecord(t.Did); err == nil && fpath != "" {
+	// 	t.Path = fpath
+	// 	t.Callback(client.NewResponse(200, "success", t))
+	// 	return
+	// } else if t.Token == "" {
+	// 	t.Callback(client.NewResponse(400, "retrieving local data but not hitting cache", t))
+	// }
 	u, err := url.JoinPath(t.Addr, client.FETCH_DATA_URL)
 	if err != nil {
 		t.Callback(client.NewResponse(400, err.Error(), t))

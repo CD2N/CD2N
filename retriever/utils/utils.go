@@ -13,10 +13,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/decred/base58"
 	"github.com/mholt/archiver"
 	"github.com/vedhavyas/go-subkey/sr25519"
-	"golang.org/x/crypto/blake2b"
+	"github.com/vedhavyas/go-subkey/v2"
 
 	ecies "github.com/ecies/go/v2"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -31,93 +30,18 @@ const (
 	UNNAMED_FILENAME = "Unnamed"
 )
 
-var (
-	SSPrefix        = []byte{0x53, 0x53, 0x35, 0x38, 0x50, 0x52, 0x45}
-	SubstratePrefix = []byte{0x2a}
-	CessPrefix      = []byte{0x50, 0xac}
+const (
+	MAINNET_FORMAT = 11331
+	TESTNET_FORMAT = 11330
 )
 
 func ParsingPublickey(address string) ([]byte, error) {
-	err := VerityAddress(address, CessPrefix)
-	if err != nil {
-		err := VerityAddress(address, SubstratePrefix)
-		if err != nil {
-			return nil, errors.New("invalid account")
-		}
-		data := base58.Decode(address)
-		if len(data) != (34 + len(SubstratePrefix)) {
-			return nil, errors.New("public key decoding failed")
-		}
-		return data[len(SubstratePrefix) : len(data)-2], nil
-	} else {
-		data := base58.Decode(address)
-		if len(data) != (34 + len(CessPrefix)) {
-			return nil, errors.New("public key decoding failed")
-		}
-		return data[len(CessPrefix) : len(data)-2], nil
-	}
+	_, pubkey, err := subkey.SS58Decode(address)
+	return pubkey, errors.Wrap(err, "parse publick key error")
 }
 
-func EncodePublicKeyAsSubstrateAccount(publicKey []byte) (string, error) {
-	if len(publicKey) != 32 {
-		return "", errors.New("invalid public key")
-	}
-	payload := appendBytes(SubstratePrefix, publicKey)
-	input := appendBytes(SSPrefix, payload)
-	ck := blake2b.Sum512(input)
-	checkum := ck[:2]
-	address := base58.Encode(appendBytes(payload, checkum))
-	if address == "" {
-		return address, errors.New("public key encoding failed")
-	}
-	return address, nil
-}
-
-func EncodePublicKeyAsCessAccount(publicKey []byte) (string, error) {
-	if len(publicKey) != 32 {
-		return "", errors.New("invalid public key")
-	}
-	payload := appendBytes(CessPrefix, publicKey)
-	input := appendBytes(SSPrefix, payload)
-	ck := blake2b.Sum512(input)
-	checkum := ck[:2]
-	address := base58.Encode(appendBytes(payload, checkum))
-	if address == "" {
-		return address, errors.New("public key encoding failed")
-	}
-	return address, nil
-}
-
-func appendBytes(data1, data2 []byte) []byte {
-	if data2 == nil {
-		return data1
-	}
-	return append(data1, data2...)
-}
-
-func VerityAddress(address string, prefix []byte) error {
-	decodeBytes := base58.Decode(address)
-	if len(decodeBytes) != (34 + len(prefix)) {
-		return errors.New("public key decoding failed")
-	}
-	if decodeBytes[0] != prefix[0] {
-		return errors.New("invalid account prefix")
-	}
-	pub := decodeBytes[len(prefix) : len(decodeBytes)-2]
-
-	data := append(prefix, pub...)
-	input := append(SSPrefix, data...)
-	ck := blake2b.Sum512(input)
-	checkSum := ck[:2]
-	for i := 0; i < 2; i++ {
-		if checkSum[i] != decodeBytes[32+len(prefix)+i] {
-			return errors.New("invalid account")
-		}
-	}
-	if len(pub) != 32 {
-		return errors.New("invalid account public key")
-	}
-	return nil
+func EncodePubkey(pubkey []byte, format uint16) string {
+	return subkey.SS58Encode(pubkey, format)
 }
 
 func SignedSR25519WithMnemonic(mnemonic string, msg string) ([]byte, error) {

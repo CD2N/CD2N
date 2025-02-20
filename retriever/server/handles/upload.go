@@ -20,6 +20,32 @@ import (
 	"github.com/pkg/errors"
 )
 
+func (h *ServerHandle) UploadUserFileTemp(c *gin.Context) {
+	acc := c.PostForm("account")
+	pubkey, err := utils.ParsingPublickey(acc)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", err.Error()))
+		return
+	}
+	territory := c.PostForm("territory")
+	if territory == "" {
+		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", "bad file params"))
+		return
+	}
+	file, err := c.FormFile("file")
+
+	if err != nil {
+		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", err.Error()))
+		return
+	}
+	src, err := file.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "upload user file error", err.Error()))
+		return
+	}
+	h.uploadFile(c, src, pubkey, territory, file.Filename)
+}
+
 func (h *ServerHandle) UploadUserFile(c *gin.Context) {
 	value, ok := c.Get("user")
 	if !ok {
