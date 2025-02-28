@@ -1,12 +1,17 @@
 package buffer
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
-	"github.com/CD2N/CD2N/retriever/libs/cache"
-	"github.com/CD2N/CD2N/retriever/utils"
+	"github.com/CD2N/CD2N/sdk/sdkgo/libs/cache"
 	"github.com/pkg/errors"
+)
+
+const (
+	UNNAMED_FILENAME = "Unnamed"
 )
 
 type FileBuffer struct {
@@ -70,7 +75,7 @@ func (b *FileBuffer) JoinPath(baseDir string, subpath ...string) (string, error)
 
 func (b *FileBuffer) AddData(key, fpath string) {
 
-	f, err := os.Stat(utils.ExtraPath(fpath))
+	f, err := os.Stat(ExtraPath(fpath))
 	if err != nil {
 		return
 	}
@@ -87,4 +92,23 @@ func (b *FileBuffer) RemoveData(fpath string) error {
 	}
 	b.cacher.RemoveItem(filepath.Base(fpath))
 	return nil
+}
+func CatNamePath(name, path string) string {
+	return fmt.Sprintf("%s-=+>%s", name, path)
+}
+
+func SplitNamePath(namepath string) (string, string) {
+	strs := strings.Split(namepath, "-=+>")
+	if len(strs) != 2 {
+		return UNNAMED_FILENAME, strs[len(strs)-1]
+	}
+	return strs[0], strs[1]
+}
+
+func ExtraPath(fpath string) string {
+	n, p := SplitNamePath(fpath)
+	if strings.Contains(n, UNNAMED_FILENAME) {
+		p = fpath
+	}
+	return p
 }

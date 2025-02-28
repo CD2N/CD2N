@@ -56,6 +56,11 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 	logger.GetLogger(config.LOG_GATEWAY).Infof("get file %s from local disk cache, item: %v", key, item)
 	if item.Value != "" {
 		fname, fpath := utils.SplitNamePath(item.Value)
+		if fname == "" || fname == utils.UNNAMED_FILENAME {
+			if fname, err = h.GetFileName(fid); err != nil {
+				fname = key
+			}
+		}
 		err = ServeFile(c, fname, fpath)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError,
@@ -244,4 +249,27 @@ func ParseDataIds(segment chain.SegmentInfo) []string {
 		dids = append(dids, string(fragment.Hash[:]))
 	}
 	return dids
+}
+
+func (h *ServerHandle) GetFileName(fid string) (string, error) {
+	var fname string
+	cli, err := h.gateway.GetCessClient()
+	if err != nil {
+		return fname, errors.Wrap(err, "get file name error")
+	}
+	meta, err := cli.QueryFile(fid, -1)
+	if err == nil {
+		for _, owner := range meta.Owner {
+			fname = string(owner.FileName)
+			if fname != "" {
+				return fname, nil
+			}
+		}
+	}
+	dealmap, err := cli.QueryDealMap(fid, -1)
+	if err != nil {
+		return fname, errors.Wrap(err, "get file name error")
+	}
+	fname = string(dealmap.User.FileName)
+	return fname, nil
 }

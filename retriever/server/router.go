@@ -47,7 +47,8 @@ func DebugHandle(c *gin.Context) {
 }
 
 func TokenVerify(c *gin.Context) {
-	if strings.Contains(c.Request.RequestURI, "/gentoken") {
+	if strings.Contains(c.Request.RequestURI, "/gentoken") ||
+		strings.Contains(c.Request.RequestURI, "/download") {
 		c.Next()
 		return
 	}
