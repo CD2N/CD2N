@@ -3,7 +3,6 @@ module github.com/CD2N/CD2N/sdk/sdkgo
 go 1.22.10
 
 require (
-	github.com/AstaFrode/go-substrate-rpc-client v1.1.0
 	github.com/AstaFrode/go-substrate-rpc-client/v4 v4.2.4
 	github.com/CESSProject/cess-go-sdk v0.7.0
 	github.com/centrifuge/go-substrate-rpc-client/v4 v4.2.1
@@ -18,7 +17,6 @@ require (
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/bits-and-blooms/bitset v1.13.0 // indirect
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce // indirect
-	github.com/centrifuge/go-substrate-rpc-client v2.0.0+incompatible // indirect
 	github.com/consensys/bavard v0.1.13 // indirect
 	github.com/consensys/gnark-crypto v0.12.1 // indirect
 	github.com/cosmos/go-bip39 v1.0.0 // indirect
