@@ -16,7 +16,7 @@ import (
 	"github.com/CD2N/CD2N/cacher/client"
 	"github.com/CD2N/CD2N/cacher/config"
 	"github.com/CD2N/CD2N/cacher/utils"
-	"github.com/CESSProject/cess-go-tools/cacher"
+	"github.com/CD2N/CD2N/sdk/sdkgo/libs/cache"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
 	ecies "github.com/ecies/go/v2"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -46,7 +46,7 @@ type FileManager struct {
 	Message    string
 	Account    string
 	Sign       string
-	cacher.FileCache
+	*cache.Cache
 	SelflessMode bool
 	*CryptoManager
 }
@@ -60,7 +60,7 @@ func (a *FileManager) GetAESKey(pubkey []byte) ([]byte, []byte, error) {
 	return GetAESKeyEncryptedWithECDH(a, pubkey)
 }
 
-func NewFileManager(sk string, cache cacher.FileCache, csize int, selfless bool) (*FileManager, error) {
+func NewFileManager(sk string, c *cache.Cache, csize int, selfless bool) (*FileManager, error) {
 	if csize <= 0 {
 		csize = DEFAULT_TASK_CHANNEL_SIZE
 	}
@@ -92,7 +92,7 @@ func NewFileManager(sk string, cache cacher.FileCache, csize int, selfless bool)
 		Message:       msg,
 		PrivateKey:    priKey,
 		SelflessMode:  selfless,
-		FileCache:     cache,
+		Cache:         c,
 		Sign:          hex.EncodeToString(sign),
 		CryptoManager: &CryptoManager{},
 	}, nil
@@ -150,8 +150,8 @@ func (t *FileProvideTask) Do(fmg *FileManager) {
 }
 
 func (t *FileProvideTask) FetchFile(fmg *FileManager) {
-	if fpath, err := fmg.GetCacheRecord(t.Did); err == nil && fpath != "" {
-		t.Path = fpath
+	if item := fmg.Get(t.Did); item.Value != "" {
+		t.Path = item.Value
 		t.Callback(client.NewResponse(200, "success", t))
 		return
 	}
@@ -289,13 +289,13 @@ func (t *FileStorageTask) FetchFile(fmg *FileManager) {
 		return
 	}
 	// get data from cache
-	// if fpath, err := fmg.GetCacheRecord(t.Did); err == nil && fpath != "" {
-	// 	t.Path = fpath
-	// 	t.Callback(client.NewResponse(200, "success", t))
-	// 	return
-	// } else if t.Token == "" {
-	// 	t.Callback(client.NewResponse(400, "retrieving local data but not hitting cache", t))
-	// }
+	if item := fmg.Get(t.Did); item.Value != "" {
+		t.Path = item.Value
+		t.Callback(client.NewResponse(200, "success", t))
+		return
+	} else if t.Token == "" {
+		t.Callback(client.NewResponse(400, "retrieving local data but not hitting cache", t))
+	}
 	u, err := url.JoinPath(t.Addr, client.FETCH_DATA_URL)
 	if err != nil {
 		t.Callback(client.NewResponse(400, err.Error(), t))

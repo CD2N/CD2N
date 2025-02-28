@@ -5,10 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -18,7 +16,7 @@ import (
 	"github.com/CD2N/CD2N/cacher/config"
 	"github.com/CD2N/CD2N/cacher/logger"
 	"github.com/CD2N/CD2N/cacher/utils"
-	"github.com/CESSProject/cess-go-tools/cacher"
+	"github.com/CD2N/CD2N/sdk/sdkgo/libs/cache"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
 	"github.com/go-redis/redis/v8"
 	"github.com/panjf2000/ants/v2"
@@ -64,7 +62,8 @@ func (n *CdnNode) IsAvailable() bool {
 
 type ProvideManager struct {
 	files *leveldb.DB
-	cacher.FileCache
+	//cacher.FileCache
+	*cache.Cache
 	storagers *sync.Map
 	cdnNodes  *sync.Map
 	staskMap  *sync.Map
@@ -74,14 +73,14 @@ type ProvideManager struct {
 	temp string
 }
 
-func NewProvideManager(c cacher.FileCache, ch chan<- FileTask, cli *chain.CacheProtoContract, fdbPath, tempDir string) (*ProvideManager, error) {
+func NewProvideManager(c *cache.Cache, ch chan<- FileTask, cli *chain.CacheProtoContract, fdbPath, tempDir string) (*ProvideManager, error) {
 	files, err := client.NewDB(fdbPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "new provide manager error")
 	}
 	return &ProvideManager{
 		files:     files,
-		FileCache: c,
+		Cache:     c,
 		taskChan:  ch,
 		cli:       cli,
 		storagers: &sync.Map{},
@@ -119,11 +118,12 @@ func (m *ProvideManager) ProvideTaskCallback(e Event) {
 		return
 	}
 	if task.TaskType == TYPE_PROVIDE {
-		if fpath, err := m.FileCache.GetCacheRecord(task.Did); err == nil && fpath != "" {
+
+		if item := m.Cache.Get(task.Did); item.Value != "" {
 			return
 		}
-		if err := m.FileCache.MoveFileToCache(task.Did, task.Path); err != nil {
-			logger.GetLogger(config.LOG_TASK).Error(e.Error())
+		if fs, err := os.Stat(task.Path); err == nil {
+			m.Cache.AddWithData(task.Did, task.Path, fs.Size())
 		}
 	}
 }
@@ -181,7 +181,8 @@ func (m *ProvideManager) StorageTaskCallback(e Event) {
 				logger.GetLogger(config.LOG_TASK).Error(e.Error())
 				return
 			}
-			//m.CopyAndStoreStorageTask(task)
+			//Redistribute data
+			m.CopyAndStoreStorageTask(task)
 		}
 		m.taskChan <- task
 		return
@@ -198,8 +199,10 @@ func (m *ProvideManager) StorageTaskCallback(e Event) {
 			logger.GetLogger(config.LOG_TASK).Infof("task %s done, fid: %s", task.Tid, task.Fid)
 			return
 		}
-		if fpath, err := m.FileCache.GetCacheRecord(task.Did); err != nil || fpath == "" {
-			m.FileCache.MoveFileToCache(task.Did, task.Path)
+		if item := m.Cache.Get(task.Did); item.Key == "" || item.Value == "" {
+			if fs, err := os.Stat(task.Path); err == nil {
+				m.Cache.AddWithData(task.Did, task.Path, fs.Size())
+			}
 		}
 		task.Did = task.Fragments[0]
 		task.Path = path.Join(m.temp, task.Fid, task.Did)
@@ -370,11 +373,11 @@ func (m *ProvideManager) ExecuteTasks(ctx context.Context, taskCh <-chan *redis.
 					logger.GetLogger(config.LOG_TASK).Error(err.Error())
 					continue
 				}
-				if fpath, err := m.FileCache.GetCacheRecord(taskPld.Did); err == nil {
+				if item := m.Cache.Get(taskPld.Did); item.Value != "" {
 					m.taskChan <- &FileProvideTask{
 						Task:      taskPld,
 						TaskType:  TYPE_PROVIDE,
-						Path:      fpath,
+						Path:      item.Value,
 						TeePubkey: cdnNode.TeePubkey,
 						Callback:  m.ProvideTaskCallback,
 					}
@@ -583,27 +586,4 @@ func CheckNodeAvailable(node any) bool {
 		n.RedisAddress = info.RedisAddr
 	}
 	return false
-}
-
-func (m *ProvideManager) RestoreCacheFiles(cacheDir string) error {
-	return filepath.Walk(cacheDir, func(path string, info fs.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			return nil
-		}
-		if info.Size() == client.FRAGMENT_SIZE {
-			paths := strings.Split(path, "/")
-			l := len(paths)
-			if l < 4 {
-				return nil
-			}
-			m.FileCache.AddCacheRecord(filepath.Join(paths[l-1], paths[l-2], paths[l-3]), path)
-		} else if info.Size() > 0 {
-			m.FileCache.AddCacheRecord(info.Name(), path)
-		}
-		logger.GetLogger(config.LOG_NODE).Info("restore file ", path)
-		return nil
-	})
 }

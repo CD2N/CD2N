@@ -94,9 +94,9 @@ func Cors() gin.HandlerFunc {
 func RegisterHandles(router *gin.Engine, h *handles.ServerHandle) {
 
 	router.GET("/status", h.GetNodeInfo)
+	router.POST("/upfile", h.UploadUserFileTemp)
 	router.GET("/capacity/:addr", h.QueryCacheCap)
 	router.GET("/querydata/:did", h.QueryData)
-	router.POST("/upfile", h.UploadUserFileTemp)
 	router.POST("/cache-fetch", h.FetchCacheData)
 	router.POST("/provide", h.ProvideData)
 	if !config.GetConfig().LaunchGateway {

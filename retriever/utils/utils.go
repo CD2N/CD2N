@@ -7,7 +7,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -220,22 +219,22 @@ func Remove0x(hex string) string {
 	return hex
 }
 
-func CatNamePath(name, path string) string {
-	return fmt.Sprintf("%s-=+>%s", name, path)
-}
+// func CatNamePath(name, path string) string {
+// 	return fmt.Sprintf("%s-=+>%s", name, path)
+// }
 
-func SplitNamePath(namepath string) (string, string) {
-	strs := strings.Split(namepath, "-=+>")
-	if len(strs) != 2 {
-		return UNNAMED_FILENAME, strs[len(strs)-1]
-	}
-	return strs[0], strs[1]
-}
+// func SplitNamePath(namepath string) (string, string) {
+// 	strs := strings.Split(namepath, "-=+>")
+// 	if len(strs) != 2 {
+// 		return UNNAMED_FILENAME, strs[len(strs)-1]
+// 	}
+// 	return strs[0], strs[1]
+// }
 
-func ExtraPath(fpath string) string {
-	n, p := SplitNamePath(fpath)
-	if strings.Contains(n, UNNAMED_FILENAME) {
-		p = fpath
-	}
-	return p
-}
+// func ExtraPath(fpath string) string {
+// 	n, p := SplitNamePath(fpath)
+// 	if strings.Contains(n, UNNAMED_FILENAME) {
+// 		p = fpath
+// 	}
+// 	return p
+// }

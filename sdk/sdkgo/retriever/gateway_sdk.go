@@ -48,6 +48,7 @@ type PartsInfo struct {
 	Parts      []string  `json:"parts,omitempty"`
 	PartsCount int       `json:"parts_count,omitempty"`
 	TotalParts int       `json:"total_parts,omitempty"`
+	PartSize   int64     `json:"-"`
 	TotalSize  int64     `json:"total_size,omitempty"`
 	UpdateDate time.Time `json:"update_date,omitempty"`
 }
@@ -135,6 +136,110 @@ func UploadFile(baseUrl, token, territory, filename string, file io.Reader) (str
 	return fid, nil
 }
 
+func UploadFileParts(baseUrl, token, fpath string, info *PartsInfo) (string, error) {
+	var (
+		fid    string
+		err    error
+		buffer bytes.Buffer
+	)
+	writer := multipart.NewWriter(&buffer)
+	writer.WriteField("shadowhash", info.ShadowHash)
+	writer.WriteField("partid", fmt.Sprint(info.PartsCount))
+	part, err := writer.CreateFormFile("file", info.Parts[info.PartsCount])
+	if err != nil {
+		return fid, errors.Wrap(err, "upload file part error")
+	}
+
+	if info.DirName != "" {
+		file, err := os.Open(filepath.Join(fpath, info.Parts[info.PartsCount]))
+		if err != nil {
+			return fid, errors.Wrap(err, "upload file part error")
+		}
+		defer file.Close()
+		_, err = io.Copy(part, file)
+		if err != nil {
+			return fid, errors.Wrap(err, "upload file part error")
+		}
+
+	} else {
+		file, err := os.Open(fpath)
+		if err != nil {
+			return fid, errors.Wrap(err, "upload file part error")
+		}
+		defer file.Close()
+		size := info.PartSize
+		_, err = file.Seek(int64(info.PartsCount)*size, io.SeekStart)
+		if err != nil {
+			return fid, errors.Wrap(err, "upload file part error")
+		}
+		if int64(info.PartsCount+1)*size > info.TotalSize {
+			size = info.TotalSize % size
+		}
+		_, err = io.CopyN(part, file, size)
+		if err != nil {
+			return fid, errors.Wrap(err, "upload file part error")
+		}
+		if err := writer.Close(); err != nil {
+			return fid, errors.Wrap(err, "upload file part error")
+		}
+	}
+
+	headers := map[string]string{
+		"Content-Type": writer.FormDataContentType(),
+		"token":        fmt.Sprintf("Bearer %s", token),
+	}
+	u, err := url.JoinPath(baseUrl, GATEWAY_UPLOADPART_URL)
+	if err != nil {
+		return fid, errors.Wrap(err, "upload file part error")
+	}
+	body, err := SendHttpRequest(http.MethodPost, u, headers, &buffer)
+	if err != nil {
+		return fid, errors.Wrap(err, "upload file part error")
+	}
+	resp := Response{}
+	if err = json.Unmarshal(body, &resp); err != nil {
+		return fid, errors.Wrap(err, "upload file part error")
+	}
+	info.PartsCount++
+	fid = fmt.Sprint(resp.Data)
+	return fid, nil
+}
+
+func RequestToUploadParts(baseUrl, fpath, token, territory, filename, achive string, partSize int64) (PartsInfo, error) {
+	var info PartsInfo
+	fs, err := os.Stat(fpath)
+	if err != nil {
+		return info, errors.Wrap(err, "request to upload file parts error")
+	}
+	if fs.IsDir() {
+		info, err = CreatePartsInfoForDir(fpath, filename, achive)
+		if err != nil {
+			return info, errors.Wrap(err, "request to upload file parts error")
+		}
+	} else {
+		info, err = CreatePartsInfoForFile(fpath, filename, fs.Size(), partSize)
+		if err != nil {
+			return info, errors.Wrap(err, "request to upload file parts error")
+		}
+	}
+	info.Territory = territory
+	info.UpdateDate = time.Now()
+	headers := map[string]string{
+		"Content-Type": "application/json",
+		"token":        fmt.Sprintf("Bearer %s", token),
+	}
+	u, err := url.JoinPath(baseUrl, GATEWAY_PARTUPLOAD_URL)
+	if err != nil {
+		return info, errors.Wrap(err, "request to upload file parts error")
+	}
+	jbytes, err := json.Marshal(info)
+	if err != nil {
+		return info, errors.Wrap(err, "request to upload file parts error")
+	}
+	_, err = SendHttpRequest(http.MethodPost, u, headers, bytes.NewBuffer(jbytes))
+	return info, errors.Wrap(err, "request to upload file parts error")
+}
+
 func CreatePartsInfoForFile(fpath, filename string, fileSize, partSize int64) (PartsInfo, error) {
 
 	if partSize <= DEFAULT_PART_SIZE {
@@ -143,10 +248,14 @@ func CreatePartsInfoForFile(fpath, filename string, fileSize, partSize int64) (P
 	if partSize > fileSize {
 		partSize = fileSize
 	}
+	if filename == "" {
+		filename = filepath.Base(fpath)
+	}
 	info := PartsInfo{
 		FileName:   filename,
 		TotalSize:  fileSize,
-		TotalParts: int((fileSize + (fileSize - fileSize%partSize)) / partSize),
+		PartSize:   partSize,
+		TotalParts: int((fileSize + (partSize - fileSize%partSize)) / partSize),
 	}
 
 	f, err := os.Open(fpath)
@@ -213,41 +322,6 @@ func CreatePartsInfoForDir(fpath, dirname, archive string) (PartsInfo, error) {
 	}
 	info.ShadowHash = hex.EncodeToString(hash.Sum(nil))
 	return info, nil
-}
-
-func RequestToUploadParts(baseUrl, fpath, token, territory, filename, achive string, partSize int64) (PartsInfo, error) {
-	var info PartsInfo
-	fs, err := os.Stat(fpath)
-	if err != nil {
-		return info, errors.Wrap(err, "request to upload file parts error")
-	}
-	if fs.IsDir() {
-		info, err = CreatePartsInfoForDir(fpath, filename, achive)
-		if err != nil {
-			return info, errors.Wrap(err, "request to upload file parts error")
-		}
-	} else {
-		info, err = CreatePartsInfoForFile(fpath, filename, fs.Size(), partSize)
-		if err != nil {
-			return info, errors.Wrap(err, "request to upload file parts error")
-		}
-	}
-	info.Territory = territory
-	info.UpdateDate = time.Now()
-	headers := map[string]string{
-		"Content-Type": "application/json",
-		"token":        fmt.Sprintf("Bear %s", token),
-	}
-	u, err := url.JoinPath(baseUrl, GATEWAY_PARTUPLOAD_URL)
-	if err != nil {
-		return info, errors.Wrap(err, "request to upload file parts error")
-	}
-	jbytes, err := json.Marshal(info)
-	if err != nil {
-		return info, errors.Wrap(err, "request to upload file parts error")
-	}
-	_, err = SendHttpRequest(http.MethodPost, u, headers, bytes.NewBuffer(jbytes))
-	return info, errors.Wrap(err, "request to upload file parts error")
 }
 
 func SendHttpRequest(method, url string, headers map[string]string, dataReader *bytes.Buffer) ([]byte, error) {

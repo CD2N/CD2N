@@ -16,6 +16,7 @@ import (
 	"github.com/CD2N/CD2N/retriever/libs/client"
 	"github.com/CD2N/CD2N/retriever/server/auth"
 	"github.com/CD2N/CD2N/retriever/utils"
+	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 )
@@ -104,7 +105,7 @@ func (h *ServerHandle) uploadFile(c *gin.Context, file io.Reader, acc []byte, te
 		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "upload file error", err.Error()))
 		return
 	}
-	h.gateway.FileCacher.AddData(finfo.Fid, utils.CatNamePath(filename, cachePath))
+	h.gateway.FileCacher.AddData(finfo.Fid, buffer.CatNamePath(filename, cachePath))
 	err = h.gateway.ProvideFile(context.Background(), time.Hour, finfo)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "upload file error", err.Error()))
@@ -192,7 +193,7 @@ func (h *ServerHandle) UploadFileParts(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "parts upload error", err.Error()))
 			return
 		}
-		c.JSON(http.StatusOK, client.NewResponse(http.StatusOK, "success", idx))
+		c.JSON(http.StatusOK, client.NewResponse(http.StatusOK, "success", partId))
 		return
 	}
 	//combine files
