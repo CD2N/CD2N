@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"github.com/CD2N/CD2N/retriever/config"
-	"github.com/CD2N/CD2N/retriever/libs/buffer"
 	"github.com/CD2N/CD2N/retriever/libs/chain"
 	"github.com/CD2N/CD2N/retriever/libs/client"
 	"github.com/CD2N/CD2N/retriever/libs/task"
 	"github.com/CD2N/CD2N/retriever/logger"
 	"github.com/CD2N/CD2N/retriever/utils"
+	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
 	cess "github.com/CESSProject/cess-go-sdk/chain"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/go-redis/redis/v8"

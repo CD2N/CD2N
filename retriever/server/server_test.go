@@ -378,7 +378,7 @@ func TestWalk(t *testing.T) {
 }
 
 func TestConnRedis(t *testing.T) {
-	redisCli := client.NewRedisClient("127.0.0.1:6379", "retriever", "")
+	redisCli := client.NewRedisClient("127.0.0.1:6379", "retriever", "cess_network@6379")
 	err := client.PublishMessage(redisCli, context.Background(), "test", "test data")
 	if err != nil {
 		t.Fatal(err)

@@ -2,6 +2,7 @@ package client
 
 import (
 	"encoding/json"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -54,6 +55,7 @@ func GetData(db *leveldb.DB, key string, value any) error {
 	}
 	err = json.Unmarshal(data, value)
 	if err != nil {
+		log.Println("unmarshal data from leveldb error, data:", string(data))
 		return errors.Wrap(err, "get data from leveldb error")
 	}
 	return nil

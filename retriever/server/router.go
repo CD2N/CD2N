@@ -47,7 +47,8 @@ func DebugHandle(c *gin.Context) {
 }
 
 func TokenVerify(c *gin.Context) {
-	if strings.Contains(c.Request.RequestURI, "/gentoken") {
+	if strings.Contains(c.Request.RequestURI, "/gentoken") ||
+		strings.Contains(c.Request.RequestURI, "/download") {
 		c.Next()
 		return
 	}
@@ -95,6 +96,7 @@ func RegisterHandles(router *gin.Engine, h *handles.ServerHandle) {
 	router.GET("/status", h.GetNodeInfo)
 	router.GET("/capacity/:addr", h.QueryCacheCap)
 	router.GET("/querydata/:did", h.QueryData)
+	router.POST("/upfile", h.UploadUserFileTemp)
 	router.POST("/cache-fetch", h.FetchCacheData)
 	router.POST("/provide", h.ProvideData)
 	if !config.GetConfig().LaunchGateway {

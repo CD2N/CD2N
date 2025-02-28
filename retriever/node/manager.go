@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/CD2N/CD2N/retriever/libs/buffer"
-	"github.com/CD2N/CD2N/retriever/libs/cache"
 	"github.com/CD2N/CD2N/retriever/libs/client"
 	"github.com/CD2N/CD2N/retriever/libs/task"
+	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
+	"github.com/CD2N/CD2N/sdk/sdkgo/libs/cache"
 	"github.com/go-redis/redis/v8"
 	"github.com/ipfs/kubo/client/rpc"
 	"github.com/pkg/errors"

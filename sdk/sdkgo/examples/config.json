@@ -1,0 +1,17 @@
+{
+    "gateway": "http://154.194.34.206:1306", 
+    "users": [
+        {
+            "mnemonics": "father weird payment camp saddle assault dune knee network prize enemy liquid",
+            "territory": "test1",
+            "capacity": 0
+        }
+    ],
+    "min_file_size": 10485760,
+    "max_file_size": 314572800,
+    "daily_target": 5497558138880,
+    "target_days": 20,
+    "upload_size": 0,
+    "daily_upload_size": 0,
+    "running_days": 0
+}

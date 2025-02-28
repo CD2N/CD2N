@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"github.com/CD2N/CD2N/retriever/config"
-	"github.com/CD2N/CD2N/retriever/libs/buffer"
 	"github.com/CD2N/CD2N/retriever/libs/chain"
 	"github.com/CD2N/CD2N/retriever/libs/client"
 	"github.com/CD2N/CD2N/retriever/libs/task"
 	"github.com/CD2N/CD2N/retriever/logger"
 	"github.com/CD2N/CD2N/retriever/utils"
+	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
 	cess "github.com/CESSProject/cess-go-sdk/chain"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
@@ -193,24 +193,29 @@ func (g *Gateway) ProvideTaskChecker(ctx context.Context, buffer *buffer.FileBuf
 }
 
 func (g *Gateway) checker(ctx context.Context, buffer *buffer.FileBuffer) error {
-	var ftask task.ProvideTask
 	err := client.DbIterator(g.taskRecord,
 		func(key []byte) error {
 			select {
 			case <-ctx.Done():
 			default:
 			}
+			var ftask task.ProvideTask
 			fid := string(key)
+			if strings.Contains(fid, config.DB_SEGMENT_PREFIX) {
+				return nil
+			}
 			g.keyLock.Lock(fid)
 			defer g.keyLock.Unlock(fid)
 			if err := client.GetData(g.taskRecord, fid, &ftask); err != nil {
 				return err
 			}
+			logger.GetLogger(config.LOG_PROVIDER).Info("check file: ", fid, "  ", ftask.SubTasks)
 			if ftask.WorkDone {
 				g.pstats.TaskDone(fid)
 				g.keyLock.RemoveLock(fid)
+				client.DeleteData(g.taskRecord, fid)
 				logger.GetLogger(config.LOG_PROVIDER).Infof("file %s distribute workflow done. \n", fid)
-				return client.DeleteData(g.taskRecord, fid)
+				return nil
 			}
 			done := 0
 			cli, err := g.GetCessClient()
@@ -225,9 +230,7 @@ func (g *Gateway) checker(ctx context.Context, buffer *buffer.FileBuffer) error 
 						v.Done = time.Now().Format(config.TIME_LAYOUT)
 						done++
 						ftask.SubTasks[k] = v
-						if err = RemoveSubTaskFiles(buffer, v.GroupId, ftask); err != nil {
-							logger.GetLogger(config.LOG_PROVIDER).Error(err)
-						}
+						RemoveSubTaskFiles(buffer, v.GroupId, ftask)
 						continue
 					}
 					upt, err := time.Parse(config.TIME_LAYOUT, v.Timestamp)
@@ -249,18 +252,21 @@ func (g *Gateway) checker(ctx context.Context, buffer *buffer.FileBuffer) error 
 			}
 
 			if done == task.PROVIDE_TASK_GROUP_NUM {
-				logger.GetLogger(config.LOG_PROVIDER).Infof("file %s be distributed. \n", fid)
+				logger.GetLogger(config.LOG_PROVIDER).Infof("file %s be distributed done. \n", fid)
 				ftask.WorkDone = true
 			} else if len(ftask.SubTasks) < task.PROVIDE_TASK_GROUP_NUM {
 				err := client.PublishMessage(g.redisCli, ctx, client.CHANNEL_PROVIDE, ftask.Task)
-				if err != nil {
-					return err
+				if err == nil {
+					ftask.Retry += 1
+					g.pstats.TaskFlash(fid)
+					logger.GetLogger(config.LOG_PROVIDER).Infof("redistribute file %s. \n", fid)
+				} else {
+					logger.GetLogger(config.LOG_PROVIDER).Error(err)
 				}
-				ftask.Retry += 1
-				g.pstats.TaskFlash(fid)
 			}
 			if err := client.PutData(g.taskRecord, fid, ftask); err != nil {
-				return err
+				logger.GetLogger(config.LOG_PROVIDER).Error(err)
+				return nil
 			}
 			if done == task.PROVIDE_TASK_GROUP_NUM {
 				//remove fid from provide task stats

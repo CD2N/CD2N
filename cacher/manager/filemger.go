@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/CD2N/CD2N/cacher/client"
+	"github.com/CD2N/CD2N/cacher/config"
 	"github.com/CD2N/CD2N/cacher/utils"
 	"github.com/CESSProject/cess-go-tools/cacher"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
@@ -34,16 +35,12 @@ type Endpoint struct {
 }
 
 type FileTask interface {
-	Do(*Resource)
+	Do(*FileManager)
 }
 
 type FileManager struct {
-	taskChan chan FileTask
-	Keypair  signature.KeyringPair
-	Resource
-}
-
-type Resource struct {
+	taskChan   chan FileTask
+	Keypair    signature.KeyringPair
 	Address    string
 	PrivateKey *ecdsa.PrivateKey
 	Message    string
@@ -59,7 +56,7 @@ type CryptoManager struct {
 	Date time.Time
 }
 
-func (a *Resource) GetAESKey(pubkey []byte) ([]byte, []byte, error) {
+func (a *FileManager) GetAESKey(pubkey []byte) ([]byte, []byte, error) {
 	return GetAESKeyEncryptedWithECDH(a, pubkey)
 }
 
@@ -76,10 +73,9 @@ func NewFileManager(sk string, cache cacher.FileCache, csize int, selfless bool)
 	if err != nil {
 		return nil, errors.Wrap(err, "new file manager error")
 	}
-	acc, err := utils.EncodePublicKeyAsCessAccount(keypair.PublicKey)
-	if err != nil {
-		return nil, errors.Wrap(err, "new file manager error")
-	}
+
+	acc := utils.EncodePubkey(keypair.PublicKey, config.GetConfig().Network)
+
 	sign, err := utils.SignedSR25519WithMnemonic(keypair.URI, msg)
 	if err != nil {
 		return nil, errors.Wrap(err, "new file manager error")
@@ -89,18 +85,16 @@ func NewFileManager(sk string, cache cacher.FileCache, csize int, selfless bool)
 		return nil, errors.Wrap(err, "new file manager error")
 	}
 	return &FileManager{
-		taskChan: make(chan FileTask, csize),
-		Keypair:  keypair,
-		Resource: Resource{
-			Address:       crypto.PubkeyToAddress(priKey.PublicKey).Hex(),
-			Account:       acc,
-			Message:       msg,
-			PrivateKey:    priKey,
-			SelflessMode:  selfless,
-			FileCache:     cache,
-			Sign:          hex.EncodeToString(sign),
-			CryptoManager: &CryptoManager{},
-		},
+		taskChan:      make(chan FileTask, csize),
+		Keypair:       keypair,
+		Address:       crypto.PubkeyToAddress(priKey.PublicKey).Hex(),
+		Account:       acc,
+		Message:       msg,
+		PrivateKey:    priKey,
+		SelflessMode:  selfless,
+		FileCache:     cache,
+		Sign:          hex.EncodeToString(sign),
+		CryptoManager: &CryptoManager{},
 	}, nil
 }
 
@@ -118,7 +112,7 @@ func (m *FileManager) RunTaskServer(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case task := <-m.taskChan:
-			pool.Submit(func() { task.Do(&m.Resource) })
+			pool.Submit(func() { task.Do(m) })
 		}
 	}
 }
@@ -147,16 +141,16 @@ func (t FileProvideTask) String() string {
 	return string(jbytes)
 }
 
-func (t *FileProvideTask) Do(res *Resource) {
+func (t *FileProvideTask) Do(fmg *FileManager) {
 	if t.TaskType == TYPE_PROVIDE {
-		t.PushFile(res)
+		t.PushFile(fmg)
 	} else if t.TaskType == TYPE_RETRIEVE {
-		t.FetchFile(res)
+		t.FetchFile(fmg)
 	}
 }
 
-func (t *FileProvideTask) FetchFile(res *Resource) {
-	if fpath, err := res.GetCacheRecord(t.Did); err == nil && fpath != "" {
+func (t *FileProvideTask) FetchFile(fmg *FileManager) {
+	if fpath, err := fmg.GetCacheRecord(t.Did); err == nil && fpath != "" {
 		t.Path = fpath
 		t.Callback(client.NewResponse(200, "success", t))
 		return
@@ -167,7 +161,7 @@ func (t *FileProvideTask) FetchFile(res *Resource) {
 		return
 	}
 	if err = client.GetFileFromStorageNode(u,
-		res.Account, res.Message, res.Sign,
+		fmg.Account, fmg.Message, fmg.Sign,
 		t.Fid, t.Did, t.Path,
 	); err != nil {
 		t.Callback(client.NewResponse(500, err.Error(), t))
@@ -176,7 +170,7 @@ func (t *FileProvideTask) FetchFile(res *Resource) {
 	t.Callback(client.NewResponse(200, "success", t))
 }
 
-func (t *FileProvideTask) PushFile(res *Resource) {
+func (t *FileProvideTask) PushFile(fmg *FileManager) {
 
 	var (
 		aeskey, pubkey []byte
@@ -189,8 +183,8 @@ func (t *FileProvideTask) PushFile(res *Resource) {
 		return
 	}
 
-	if !res.SelflessMode {
-		aeskey, pubkey, err = res.GetAESKey(t.TeePubkey)
+	if !fmg.SelflessMode {
+		aeskey, pubkey, err = fmg.GetAESKey(t.TeePubkey)
 		if err != nil {
 			t.Callback(client.NewResponse(400, err.Error(), t))
 			return
@@ -211,7 +205,7 @@ func (t *FileProvideTask) PushFile(res *Resource) {
 		Did:       t.Did,
 		Size:      fs.Size(),
 		Key:       hex.EncodeToString(pubkey),
-		Provider:  res.Address,
+		Provider:  fmg.Address,
 		Timestamp: time.Now().Format(TIME_LAYOUT),
 	}
 	jbytes, err := json.Marshal(fmeta)
@@ -261,23 +255,23 @@ func (t FileStorageTask) String() string {
 	return string(jbytes)
 }
 
-func (t *FileStorageTask) Do(res *Resource) {
+func (t *FileStorageTask) Do(fmg *FileManager) {
 	if t.TaskType == TYPE_RETRIEVE {
-		t.FetchFile(res)
+		t.FetchFile(fmg)
 	} else if t.TaskType == TYPE_PROVIDE {
-		t.PushFile(res)
+		t.PushFile(fmg)
 	}
 }
 
-func (t *FileStorageTask) FetchFile(res *Resource) {
+func (t *FileStorageTask) FetchFile(fmg *FileManager) {
 	if t.Did == "" {
 		req := client.FileRequest{
-			Pubkey:    crypto.CompressPubkey(&res.PrivateKey.PublicKey),
+			Pubkey:    crypto.CompressPubkey(&fmg.PrivateKey.PublicKey),
 			Fid:       t.Fid,
 			Timestamp: time.Now().Format(TIME_LAYOUT),
 		}
 		jbytes, _ := json.Marshal(&req)
-		sign, _ := utils.SignWithSecp256k1PrivateKey(res.PrivateKey, jbytes)
+		sign, _ := utils.SignWithSecp256k1PrivateKey(fmg.PrivateKey, jbytes)
 		req.Sign = hex.EncodeToString(sign)
 		u, err := url.JoinPath(t.Addr, client.CLAIM_DATA_URL)
 		if err != nil {
@@ -294,6 +288,14 @@ func (t *FileStorageTask) FetchFile(res *Resource) {
 		t.Callback(client.NewResponse(200, "success", t))
 		return
 	}
+	// get data from cache
+	// if fpath, err := fmg.GetCacheRecord(t.Did); err == nil && fpath != "" {
+	// 	t.Path = fpath
+	// 	t.Callback(client.NewResponse(200, "success", t))
+	// 	return
+	// } else if t.Token == "" {
+	// 	t.Callback(client.NewResponse(400, "retrieving local data but not hitting cache", t))
+	// }
 	u, err := url.JoinPath(t.Addr, client.FETCH_DATA_URL)
 	if err != nil {
 		t.Callback(client.NewResponse(400, err.Error(), t))
@@ -317,14 +319,14 @@ func (t *FileStorageTask) FetchFile(res *Resource) {
 	t.Callback(client.NewResponse(200, "success", t))
 }
 
-func (t *FileStorageTask) PushFile(res *Resource) {
+func (t *FileStorageTask) PushFile(fmg *FileManager) {
 	u, err := url.JoinPath(t.MinerAddr, "fragment")
 	if err != nil {
 		t.Callback(client.NewResponse(400, err.Error(), t))
 		return
 	}
 	if err := client.PushFileToStorageNode(u,
-		res.Account, res.Message, res.Sign,
+		fmg.Account, fmg.Message, fmg.Sign,
 		t.Fid, t.Did, t.Path); err != nil {
 		t.Callback(client.NewResponse(500, err.Error(), t))
 		return
@@ -332,29 +334,29 @@ func (t *FileStorageTask) PushFile(res *Resource) {
 	t.Callback(client.NewResponse(200, "success", t))
 }
 
-func GetAESKeyEncryptedWithECDH(a *Resource, pubkey []byte) ([]byte, []byte, error) {
+func GetAESKeyEncryptedWithECDH(fmg *FileManager, pubkey []byte) ([]byte, []byte, error) {
 	var err error
 
-	if a.Key == nil || time.Since(a.Date) > time.Hour*24*7 {
-		a.Key, err = ecies.GenerateKey()
+	if fmg.Key == nil || time.Since(fmg.Date) > time.Hour*24*7 {
+		fmg.Key, err = ecies.GenerateKey()
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "get aes key with ECDH error")
 		}
-		a.Date = time.Now()
+		fmg.Date = time.Now()
 	}
 	pk, err := ecies.NewPublicKeyFromBytes(pubkey)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "get aes key with ECDH error")
 	}
 
-	key, err := a.Key.ECDH(pk)
+	key, err := fmg.Key.ECDH(pk)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "get aes key with ECDH error")
 	}
-	return key, a.Key.PublicKey.Bytes(true), nil
+	return key, fmg.Key.PublicKey.Bytes(true), nil
 }
 
-func GetAESKeyEncryptedWithRsa(a *Resource, pubkey []byte) ([]byte, []byte, error) {
+func GetAESKeyEncryptedWithRsa(fmg *FileManager, pubkey []byte) ([]byte, []byte, error) {
 	var err error
 	rsaPk, err := x509.ParsePKCS1PublicKey(pubkey)
 	if err != nil {

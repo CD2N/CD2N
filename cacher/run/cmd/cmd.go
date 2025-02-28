@@ -249,6 +249,13 @@ func cmd_run_func(cmd *cobra.Command, args []string) {
 		}
 	}()
 
+	// go func() {
+	// 	err = mg.StorageTaskChecker(ctx)
+	// 	if err != nil {
+	// 		log.Println("storage status checker failed", err)
+	// 	}
+	// }()
+
 	taskCh := make(chan *redis.Message, 10240)
 	go func() {
 		ticker := time.NewTicker(time.Minute * 15)
