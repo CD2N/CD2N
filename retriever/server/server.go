@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	READ_TIMEOUT  = 60
-	WRITE_TIMEOUT = 60
+	READ_TIMEOUT  = 300
+	WRITE_TIMEOUT = 300
 )
 
 const (

@@ -15,7 +15,7 @@ import (
 	"github.com/CD2N/CD2N/retriever/config"
 	"github.com/CD2N/CD2N/retriever/libs/client"
 	"github.com/CD2N/CD2N/retriever/logger"
-	"github.com/CD2N/CD2N/retriever/utils"
+	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
 	"github.com/CESSProject/cess-go-sdk/chain"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
@@ -55,8 +55,8 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 	item := h.gateway.FileCacher.GetData(key)
 	logger.GetLogger(config.LOG_GATEWAY).Infof("get file %s from local disk cache, item: %v", key, item)
 	if item.Value != "" {
-		fname, fpath := utils.SplitNamePath(item.Value)
-		if fname == "" || fname == utils.UNNAMED_FILENAME {
+		fname, fpath := buffer.SplitNamePath(item.Value)
+		if fname == "" || fname == buffer.UNNAMED_FILENAME {
 			if fname, err = h.GetFileName(fid); err != nil {
 				fname = key
 			}

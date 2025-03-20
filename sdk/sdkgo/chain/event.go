@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/AstaFrode/go-substrate-rpc-client/v4/registry"
-	"github.com/AstaFrode/go-substrate-rpc-client/v4/registry/parser"
-	"github.com/AstaFrode/go-substrate-rpc-client/v4/types"
+	"github.com/centrifuge/go-substrate-rpc-client/v4/registry"
+	"github.com/centrifuge/go-substrate-rpc-client/v4/registry/parser"
+	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/pkg/errors"
 )
 

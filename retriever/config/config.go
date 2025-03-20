@@ -97,6 +97,7 @@ const (
 
 	DB_SEGMENT_PREFIX  = "segment-"
 	DB_FILEPART_PREFIX = "filepart-"
+	DB_FINFO_PREFIX    = "fileinfo-"
 )
 
 var conf *Config

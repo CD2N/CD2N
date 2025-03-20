@@ -14,6 +14,11 @@ const (
 	PROVIDE_TASK_CHECK_TIME = time.Minute * 30
 )
 
+type AsyncFinfoBox struct {
+	Info     FileInfo `json:"info"`
+	NonProxy bool     `json:"non_proxy"`
+}
+
 type Task struct {
 	Tid       string `json:"tid"`
 	Exp       int64  `json:"exp"`
