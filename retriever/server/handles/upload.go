@@ -9,11 +9,14 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/CD2N/CD2N/retriever/config"
 	"github.com/CD2N/CD2N/retriever/libs/client"
+	"github.com/CD2N/CD2N/retriever/libs/task"
+	"github.com/CD2N/CD2N/retriever/logger"
 	"github.com/CD2N/CD2N/retriever/server/auth"
 	"github.com/CD2N/CD2N/retriever/utils"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
@@ -33,6 +36,9 @@ func (h *ServerHandle) UploadUserFileTemp(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", "bad file params"))
 		return
 	}
+	async := c.PostForm("async") == "true"
+	noProxy := c.PostForm("noProxy") == "true"
+
 	file, err := c.FormFile("file")
 
 	if err != nil {
@@ -44,7 +50,7 @@ func (h *ServerHandle) UploadUserFileTemp(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "upload user file error", err.Error()))
 		return
 	}
-	h.uploadFile(c, src, pubkey, territory, file.Filename)
+	h.uploadFile(c, src, pubkey, territory, file.Filename, async, noProxy)
 }
 
 func (h *ServerHandle) UploadUserFile(c *gin.Context) {
@@ -63,6 +69,9 @@ func (h *ServerHandle) UploadUserFile(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", "bad file params"))
 		return
 	}
+	async := c.PostForm("async") == "true"
+	noProxy := c.PostForm("noProxy") == "true"
+
 	file, err := c.FormFile("file")
 
 	if err != nil {
@@ -74,10 +83,10 @@ func (h *ServerHandle) UploadUserFile(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "upload user file error", err.Error()))
 		return
 	}
-	h.uploadFile(c, src, user.Account, territory, file.Filename)
+	h.uploadFile(c, src, user.Account, territory, file.Filename, async, noProxy)
 }
 
-func (h *ServerHandle) uploadFile(c *gin.Context, file io.Reader, acc []byte, territory, filename string) {
+func (h *ServerHandle) uploadFile(c *gin.Context, file io.Reader, acc []byte, territory, filename string, async, noProxy bool) {
 	tmpName := hex.EncodeToString(utils.CalcSha256Hash(acc, []byte(territory+filename)))
 	fpath, err := h.buffer.NewBufPath(tmpName)
 	if err != nil {
@@ -106,17 +115,24 @@ func (h *ServerHandle) uploadFile(c *gin.Context, file io.Reader, acc []byte, te
 		return
 	}
 	h.gateway.FileCacher.AddData(finfo.Fid, buffer.CatNamePath(filename, cachePath))
-	err = h.gateway.ProvideFile(context.Background(), time.Hour, finfo)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "upload file error", err.Error()))
+	if !async {
+		err = h.gateway.ProvideFile(context.Background(), time.Hour, finfo, false)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "upload file error", err.Error()))
+			return
+		}
+		c.JSON(http.StatusOK, client.NewResponse(http.StatusOK, "success", finfo.Fid))
 		return
 	}
-	c.JSON(http.StatusOK, client.NewResponse(http.StatusOK, "success", finfo.Fid))
+	client.PutData(h.partRecord, config.DB_FINFO_PREFIX+finfo.Fid, task.AsyncFinfoBox{Info: finfo, NonProxy: noProxy})
+	c.JSON(http.StatusOK, client.NewResponse(http.StatusOK, "success", finfo))
 }
 
 func (h *ServerHandle) UploadFileParts(c *gin.Context) {
 	partId := c.PostForm("partid")
 	shadowHash := c.PostForm("shadowhash")
+	async := c.PostForm("async") == "true"
+	noProxy := c.PostForm("noProxy") == "true"
 	file, err := c.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "parts upload error", err.Error()))
@@ -214,7 +230,7 @@ func (h *ServerHandle) UploadFileParts(c *gin.Context) {
 	if partsInfo.Archive != "" && partsInfo.DirName != "" {
 		fname = partsInfo.DirName
 	}
-	h.uploadFile(c, f, user.Account, partsInfo.Territory, fname)
+	h.uploadFile(c, f, user.Account, partsInfo.Territory, fname, async, noProxy)
 }
 
 func (h *ServerHandle) RequestPartsUpload(c *gin.Context) {
@@ -309,4 +325,52 @@ func (h *ServerHandle) CombineFileParts(info PartsInfo) (string, error) {
 	}
 	h.buffer.AddData(tmpName, fpath)
 	return fpath, nil
+}
+
+func (h *ServerHandle) AsyncUploadFiles(ctx context.Context) error {
+	ticker := time.NewTicker(time.Minute * 15)
+	for {
+		select {
+		case <-ctx.Done():
+		case <-ticker.C:
+		}
+		if err := client.DbIterator(h.partRecord, func(b []byte) error {
+			key := string(b)
+			if !strings.Contains(key, config.DB_FINFO_PREFIX) {
+				return nil
+			}
+			var box task.AsyncFinfoBox
+			if err := client.GetData(h.partRecord, key, &box); err != nil {
+				logger.GetLogger(config.LOG_GATEWAY).Info("get file info box from db error ", err)
+				return nil
+			}
+
+			if box.NonProxy {
+				cli, err := h.gateway.GetCessClient()
+				if err != nil {
+					logger.GetLogger(config.LOG_GATEWAY).Info("provide file async error ", err)
+					return nil
+				}
+				_, err = cli.QueryDealMap(box.Info.Fid, -1)
+				if err != nil {
+					logger.GetLogger(config.LOG_GATEWAY).Info("provide file async error ", err)
+					return nil
+				}
+				if err := h.gateway.ProvideFile(context.Background(), time.Hour, box.Info, true); err != nil {
+					logger.GetLogger(config.LOG_GATEWAY).Info("provide file async error ", err)
+					return nil
+				}
+				client.DeleteData(h.partRecord, key)
+				return nil
+			}
+
+			if err := h.gateway.ProvideFile(context.Background(), time.Hour, box.Info, false); err != nil {
+				logger.GetLogger(config.LOG_GATEWAY).Info("provide file async error ", err)
+			}
+			client.DeleteData(h.partRecord, key)
+			return nil
+		}); err != nil {
+			logger.GetLogger(config.LOG_GATEWAY).Info("traverse the file async upload request list error", err)
+		}
+	}
 }

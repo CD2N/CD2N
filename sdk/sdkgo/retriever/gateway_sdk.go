@@ -39,6 +39,17 @@ type Response struct {
 	Data any    `json:"data"`
 }
 
+type FileInfo struct {
+	Fid       string     `json:"fid"`
+	FileName  string     `json:"file_name"`
+	BaseDir   string     `json:"base_dir"`
+	FileSize  int64      `json:"file_size"`
+	Owner     []byte     `json:"owner"`
+	Territory string     `json:"territory"`
+	Segments  []string   `json:"segments"`
+	Fragments [][]string `json:"fragments"`
+}
+
 type PartsInfo struct {
 	ShadowHash string    `json:"shadow_hash,omitempty"`
 	FileName   string    `json:"file_name,omitempty"`
@@ -104,6 +115,7 @@ func UploadFile(baseUrl, token, territory, filename string, file io.Reader) (str
 	)
 	writer := multipart.NewWriter(&buffer)
 	writer.WriteField("territory", territory)
+
 	part, err := writer.CreateFormFile("file", filename)
 	if err != nil {
 		return fid, errors.Wrap(err, "upload user file error")
