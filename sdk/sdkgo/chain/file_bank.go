@@ -77,6 +77,7 @@ func (c *Client) UploadDeclaration(fid FileHash, segment []SegmentList, user Use
 			return "", errors.Wrap(errors.New("invalid tx sender"), "upload file declaration error")
 		}
 		key = c.GetKeyRandomly()
+		defer c.PutKey(key.Address)
 	} else {
 		key = *caller
 	}
@@ -100,6 +101,7 @@ func (c *Client) DeleteUserFile(fid FileHash, owner types.AccountID, caller *sig
 			return "", errors.Wrap(errors.New("invalid tx sender"), "delete user file error")
 		}
 		key = c.GetKeyRandomly()
+		defer c.PutKey(key.Address)
 	} else {
 		key = *caller
 	}

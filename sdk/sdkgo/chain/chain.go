@@ -60,6 +60,17 @@ func OptionWithTimeout(timeout time.Duration) Option {
 	}
 }
 
+func NewLightCessClient(mnemonic string, rpcs []string) (*Client, error) {
+	cli, err := NewClient(
+		OptionWithRpcs(rpcs),
+		OptionWithAccounts([]string{mnemonic}),
+	)
+	if err != nil {
+		return cli, errors.Wrap(err, "new light cess client error")
+	}
+	return cli, nil
+}
+
 func NewClient(opts ...Option) (*Client, error) {
 	client := &Client{}
 	for _, opt := range opts {
@@ -210,14 +221,14 @@ func QueryStorage[T any](c *Client, block uint32, prefix, method string, args ..
 		return data, errors.Wrap(err, "query storage error")
 	}
 	if block == 0 {
-		ok, err = c.RPC.State.GetStorageLatest(key, data)
+		ok, err = c.RPC.State.GetStorageLatest(key, &data)
 	} else {
 		var hash types.Hash
 		hash, err = c.RPC.Chain.GetBlockHash(uint64(block))
 		if err != nil {
 			return data, errors.Wrap(err, "query storage error")
 		}
-		ok, err = c.RPC.State.GetStorage(key, data, hash)
+		ok, err = c.RPC.State.GetStorage(key, &data, hash)
 	}
 	if err != nil {
 		return data, errors.Wrap(err, "query storage error")

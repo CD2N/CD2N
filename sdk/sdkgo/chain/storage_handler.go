@@ -63,6 +63,7 @@ func (c *Client) MintTerritory(name string, gibCount, days uint32, caller *signa
 			return "", errors.Wrap(errors.New("invalid tx sender"), "mint territory error")
 		}
 		key = c.GetKeyRandomly()
+		defer c.PutKey(key.Address)
 	} else {
 		key = *caller
 	}
@@ -92,6 +93,7 @@ func (c *Client) ExpandingTerritory(name string, gibCount uint32, caller *signat
 			return "", errors.Wrap(errors.New("invalid tx sender"), "expanding territory error")
 		}
 		key = c.GetKeyRandomly()
+		defer c.PutKey(key.Address)
 	} else {
 		key = *caller
 	}
@@ -121,6 +123,7 @@ func (c *Client) RenewalTerritory(name string, days uint32, caller *signature.Ke
 			return "", errors.Wrap(errors.New("invalid tx sender"), "renewal territory error")
 		}
 		key = c.GetKeyRandomly()
+		defer c.PutKey(key.Address)
 	} else {
 		key = *caller
 	}
@@ -150,6 +153,7 @@ func (c *Client) ReactivateTerritory(name string, days uint32, caller *signature
 			return "", errors.Wrap(errors.New("invalid tx sender"), "reactivate territory error")
 		}
 		key = c.GetKeyRandomly()
+		defer c.PutKey(key.Address)
 	} else {
 		key = *caller
 	}

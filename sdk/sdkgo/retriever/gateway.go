@@ -107,25 +107,30 @@ func GenGatewayAccessToken(baseUrl, message, account string, sign []byte) (strin
 	return token, nil
 }
 
-func UploadFile(baseUrl, token, territory, filename string, file io.Reader) (string, error) {
+func uploadFile(baseUrl, token, territory, filename string, file io.Reader, async, noProxy bool) ([]byte, error) {
 	var (
-		fid    string
 		err    error
 		buffer bytes.Buffer
 	)
 	writer := multipart.NewWriter(&buffer)
 	writer.WriteField("territory", territory)
+	if async {
+		writer.WriteField("async", "true")
+	}
+	if noProxy {
+		writer.WriteField("noProxy", "true")
+	}
 
 	part, err := writer.CreateFormFile("file", filename)
 	if err != nil {
-		return fid, errors.Wrap(err, "upload user file error")
+		return nil, errors.Wrap(err, "upload user file error")
 	}
 	if _, err := io.Copy(part, file); err != nil {
-		return fid, errors.Wrap(err, "upload user file error")
+		return nil, errors.Wrap(err, "upload user file error")
 	}
 
 	if err := writer.Close(); err != nil {
-		return fid, errors.Wrap(err, "upload user file error")
+		return nil, errors.Wrap(err, "upload user file error")
 	}
 	headers := map[string]string{
 		"Content-Type": writer.FormDataContentType(),
@@ -133,66 +138,99 @@ func UploadFile(baseUrl, token, territory, filename string, file io.Reader) (str
 	}
 	u, err := url.JoinPath(baseUrl, GATEWAY_UPLOADFILE_URL)
 	if err != nil {
-		return fid, errors.Wrap(err, "upload user file error")
+		return nil, errors.Wrap(err, "upload user file error")
 	}
 	body, err := SendHttpRequest(http.MethodPost, u, headers, &buffer)
 	if err != nil {
-		return fid, errors.Wrap(err, "upload user file error")
+		return nil, errors.Wrap(err, "upload user file error")
+	}
+	return body, nil
+}
+
+func UploadFile(baseUrl, token, territory, filename string, file io.Reader) (string, error) {
+	var (
+		fid string
+	)
+	body, err := uploadFile(baseUrl, token, territory, filename, file, false, false)
+	if err != nil {
+		return "", errors.Wrap(err, "synchronous upload failed")
 	}
 	resp := Response{
 		Data: &fid,
 	}
 	if err = json.Unmarshal(body, &resp); err != nil {
-		return fid, errors.Wrap(err, "upload user file error")
+		return fid, errors.Wrap(err, "synchronous upload failed")
 	}
 	return fid, nil
 }
 
-func UploadFileParts(baseUrl, token, fpath string, info *PartsInfo) (string, error) {
+func AsyncUploadFile(baseUrl, token, territory, filename string, file io.Reader, noProxy bool) (FileInfo, error) {
 	var (
-		fid    string
+		info FileInfo
+	)
+	body, err := uploadFile(baseUrl, token, territory, filename, file, false, noProxy)
+	if err != nil {
+		return info, errors.Wrap(err, "asynchronous upload failed")
+	}
+	resp := Response{
+		Data: &info,
+	}
+	if err = json.Unmarshal(body, &resp); err != nil {
+		return info, errors.Wrap(err, "asynchronous upload failed")
+	}
+	return info, nil
+}
+
+func uploadFileParts(baseUrl, token, fpath string, info *PartsInfo, async, noProxy bool) ([]byte, error) {
+	var (
 		err    error
 		buffer bytes.Buffer
 	)
 	writer := multipart.NewWriter(&buffer)
 	writer.WriteField("shadowhash", info.ShadowHash)
 	writer.WriteField("partid", fmt.Sprint(info.PartsCount))
+	if async {
+		writer.WriteField("async", "true")
+	}
+	if noProxy {
+		writer.WriteField("noProxy", "true")
+	}
 	part, err := writer.CreateFormFile("file", info.Parts[info.PartsCount])
 	if err != nil {
-		return fid, errors.Wrap(err, "upload file part error")
+		return nil, errors.Wrap(err, "upload file part error")
 	}
 
 	if info.DirName != "" {
 		file, err := os.Open(filepath.Join(fpath, info.Parts[info.PartsCount]))
 		if err != nil {
-			return fid, errors.Wrap(err, "upload file part error")
+			return nil, errors.Wrap(err, "upload file part error")
 		}
 		defer file.Close()
 		_, err = io.Copy(part, file)
 		if err != nil {
-			return fid, errors.Wrap(err, "upload file part error")
+			return nil, errors.Wrap(err, "upload file part error")
 		}
 
 	} else {
 		file, err := os.Open(fpath)
 		if err != nil {
-			return fid, errors.Wrap(err, "upload file part error")
+			return nil, errors.Wrap(err, "upload file part error")
 		}
 		defer file.Close()
 		size := info.PartSize
 		_, err = file.Seek(int64(info.PartsCount)*size, io.SeekStart)
 		if err != nil {
-			return fid, errors.Wrap(err, "upload file part error")
+			return nil, errors.Wrap(err, "upload file part error")
 		}
 		if int64(info.PartsCount+1)*size > info.TotalSize {
 			size = info.TotalSize % size
 		}
 		_, err = io.CopyN(part, file, size)
 		if err != nil {
-			return fid, errors.Wrap(err, "upload file part error")
+			return nil, errors.Wrap(err, "upload file part error")
 		}
 		if err := writer.Close(); err != nil {
-			return fid, errors.Wrap(err, "upload file part error")
+			return nil, errors.Wrap(err, "upload file part error")
 		}
 	}
 
@@ -202,19 +240,54 @@ func UploadFileParts(baseUrl, token, fpath string, info *PartsInfo) (string, err
 	}
 	u, err := url.JoinPath(baseUrl, GATEWAY_UPLOADPART_URL)
 	if err != nil {
-		return fid, errors.Wrap(err, "upload file part error")
+		return nil, errors.Wrap(err, "upload file part error")
 	}
 	body, err := SendHttpRequest(http.MethodPost, u, headers, &buffer)
 	if err != nil {
-		return fid, errors.Wrap(err, "upload file part error")
+		return nil, errors.Wrap(err, "upload file part error")
+	}
+	info.PartsCount++
+	return body, nil
+}
+
+func UploadFileParts(baseUrl, token, fpath string, info *PartsInfo) (string, error) {
+	var (
+		fid string
+	)
+	body, err := uploadFileParts(baseUrl, token, fpath, info, false, false)
+	if err != nil {
+		return fid, errors.Wrap(err, "synchronous upload failed")
 	}
 	resp := Response{}
 	if err = json.Unmarshal(body, &resp); err != nil {
-		return fid, errors.Wrap(err, "upload file part error")
+		return fid, errors.Wrap(err, "synchronous upload failed")
 	}
-	info.PartsCount++
 	fid = fmt.Sprint(resp.Data)
 	return fid, nil
+}
+
+func AsyncUploadFileParts(baseUrl, token, fpath string, info *PartsInfo, noProxy bool) (FileInfo, error) {
+	var (
+		finfo FileInfo
+		resp  Response
+		pid   string
+	)
+	body, err := uploadFileParts(baseUrl, token, fpath, info, false, false)
+	if err != nil {
+		return finfo, errors.Wrap(err, "asynchronous upload failed")
+	}
+	if info.PartsCount == info.TotalParts {
+		resp.Data = &finfo
+	} else {
+		resp.Data = &pid
+	}
+	if err = json.Unmarshal(body, &resp); err != nil {
+		return finfo, errors.Wrap(err, "asynchronous upload failed")
+	}
+	if pid != "" && finfo.Fid == "" {
+		finfo.Fid = pid
+	}
+	return finfo, nil
 }
 
 func RequestToUploadParts(baseUrl, fpath, token, territory, filename, achive string, partSize int64) (PartsInfo, error) {

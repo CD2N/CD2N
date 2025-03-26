@@ -5,8 +5,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-func (c *Client) QueryMinerItems(accountID []byte, block uint32) (MinerInfo, error) {
-	data, err := QueryStorage[MinerInfo](c, block, "Sminer", "MinerItems", accountID)
+func (c *Client) QueryMinerItems(miner []byte, block uint32) (MinerInfo, error) {
+	data, err := QueryStorage[MinerInfo](c, block, "Sminer", "MinerItems", miner)
 	if err != nil {
 		return data, errors.Wrap(err, "query miner items error")
 	}

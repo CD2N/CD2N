@@ -6,7 +6,9 @@ require (
 	github.com/centrifuge/go-substrate-rpc-client/v4 v4.2.1
 	github.com/ethereum/go-ethereum v1.14.12
 	github.com/pkg/errors v0.9.1
+	github.com/sirupsen/logrus v1.9.3
 	github.com/vedhavyas/go-subkey v1.0.4
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
 require (

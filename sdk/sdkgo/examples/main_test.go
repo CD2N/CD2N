@@ -146,3 +146,61 @@ func TestUploadParts(t *testing.T) {
 	}
 	t.Log(res)
 }
+
+func TestChainSdk(t *testing.T) {
+	cli, err := chain.NewClient(
+		chain.OptionWithRpcs([]string{"wss://testnet-rpc.cess.network"}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	purchasedSpace, err := cli.QuerPurchasedSpace(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(purchasedSpace)
+	unitPrice, err := cli.QueryUnitPrice(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(unitPrice)
+	idleSpace, err := cli.QueryTotalIdleSpace(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(idleSpace)
+	serviceSpace, err := cli.QueryTotalServiceSpace(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(serviceSpace)
+	key, err := signature.KeyringPairFromSecret("father weird payment camp saddle assault dune knee network prize enemy liquid", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	territory, err := cli.QueryTerritory(key.PublicKey, "test1", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(territory)
+	miners, err := cli.QueryAllMiners(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(len(miners), miners[0])
+	count, err := cli.QueryCounterForMinerItems(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(count)
+	item, err := cli.QueryMinerItems(miners[0][:], 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(item)
+	dealMap, err := cli.QueryDealMap("edc6dcf6855ae3a71a432bb72a05ebee744f7386308e87c5a92d16e1b76ce705", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(dealMap)
+}
