@@ -201,7 +201,7 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 	}
 
 	go func() {
-		err = h.gateway.ProvideTaskChecker(ctx, h.buffer)
+		err := h.gateway.ProvideTaskChecker(ctx, h.buffer)
 		if err != nil {
 			log.Fatal("run providing task checker error", err)
 		}
@@ -209,7 +209,7 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 
 	go func() {
 		ticker := time.NewTicker(time.Minute * 15)
-		if err = h.gateway.LoadCdnNodes(); err != nil {
+		if err := h.gateway.LoadCdnNodes(); err != nil {
 			log.Println(err)
 		}
 		count := 0
@@ -221,6 +221,12 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 					count = 0
 				}
 			}
+		}
+	}()
+	go func() {
+		err := h.AsyncUploadFiles(ctx)
+		if err != nil {
+			log.Fatal("run providing task checker error", err)
 		}
 	}()
 	return nil

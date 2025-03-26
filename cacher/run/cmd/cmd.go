@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"encoding/hex"
-	"io/fs"
 	"log"
 	"os"
 	"os/signal"
@@ -16,7 +15,7 @@ import (
 	"github.com/CD2N/CD2N/cacher/config"
 	"github.com/CD2N/CD2N/cacher/logger"
 	"github.com/CD2N/CD2N/cacher/manager"
-	"github.com/CESSProject/cess-go-tools/cacher"
+	"github.com/CD2N/CD2N/sdk/sdkgo/libs/cache"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/go-redis/redis/v8"
 	"github.com/spf13/cobra"
@@ -127,22 +126,18 @@ func cmd_run_func(cmd *cobra.Command, args []string) {
 	ctx := context.Background()
 	conf := config.GetConfig()
 
-	cacheModule := cacher.NewCacher(
-		time.Duration(conf.Expiration),
-		conf.CacheSize,
-		filepath.Join(conf.WorkSpace, config.DEFAULT_CACHE_DIR),
-	)
+	cacheModule := cache.NewCache(uint64(conf.CacheSize))
+	cacheModule.RegisterSwapoutCallbacksCallbacks(func(i cache.Item) {
+		if i.Value != "" {
+			os.Remove(i.Value)
+		}
+	})
 	//load cache records
-	filepath.Walk(filepath.Join(conf.WorkSpace, config.DEFAULT_CACHE_DIR),
-		func(path string, info fs.FileInfo, err error) error {
-			if info.IsDir() {
-				return nil
-			}
-			cacheModule.AddCacheRecord(info.Name(), path)
-			logger.GetGlobalLogger().GetLogger(config.LOG_NODE).Infof("load cache record %s, file path:%s", info.Name(), path)
-			return nil
-		},
-	)
+	err := cacheModule.LoadCacheRecordsWithFiles(filepath.Join(conf.WorkSpace, config.DEFAULT_BUFFER_DIR))
+	if err != nil {
+		log.Println("new file buffer error", err)
+		return
+	}
 
 	cli, err := chain.NewClient(
 		chain.AccountPrivateKey(conf.SecretKey),
@@ -200,12 +195,12 @@ func cmd_run_func(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	filepath.Walk(filepath.Join(conf.WorkSpace, config.DEFAULT_BUFFER_DIR),
-		func(path string, info fs.FileInfo, err error) error {
-			os.RemoveAll(path)
-			return nil
-		},
-	)
+	// filepath.Walk(filepath.Join(conf.WorkSpace, config.DEFAULT_BUFFER_DIR),
+	// 	func(path string, info fs.FileInfo, err error) error {
+	// 		os.RemoveAll(path)
+	// 		return nil
+	// 	},
+	// )
 
 	mg, err := manager.NewProvideManager(
 		cacheModule, fmg.GetTaskChannel(), contract,
@@ -214,12 +209,6 @@ func cmd_run_func(cmd *cobra.Command, args []string) {
 	)
 	if err != nil {
 		log.Println("new provide manager error", err)
-		return
-	}
-
-	err = mg.RestoreCacheFiles(filepath.Join(conf.WorkSpace, config.DEFAULT_CACHE_DIR))
-	if err != nil {
-		log.Println("restore cached files error", err)
 		return
 	}
 
@@ -249,12 +238,12 @@ func cmd_run_func(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	// go func() {
-	// 	err = mg.StorageTaskChecker(ctx)
-	// 	if err != nil {
-	// 		log.Println("storage status checker failed", err)
-	// 	}
-	// }()
+	go func() {
+		err = mg.StorageTaskChecker(ctx)
+		if err != nil {
+			log.Println("storage status checker failed", err)
+		}
+	}()
 
 	taskCh := make(chan *redis.Message, 10240)
 	go func() {

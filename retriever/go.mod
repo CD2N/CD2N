@@ -3,6 +3,7 @@ module github.com/CD2N/CD2N/retriever
 go 1.23.0
 
 require (
+	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250228031007-68502af62272
 	github.com/CESSProject/cess-go-sdk v0.7.0
 	github.com/decred/base58 v1.0.5
 	github.com/ecies/go/v2 v2.0.10
@@ -23,6 +24,7 @@ require (
 	github.com/vedhavyas/go-subkey v1.0.4
 	github.com/vedhavyas/go-subkey/v2 v2.0.0
 	golang.org/x/crypto v0.33.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v2 v2.4.0
 )
 

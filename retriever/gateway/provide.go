@@ -33,7 +33,7 @@ type FileResponse struct {
 	Token     string   `json:"token"`
 }
 
-func (g *Gateway) ProvideFile(ctx context.Context, exp time.Duration, info task.FileInfo) error {
+func (g *Gateway) ProvideFile(ctx context.Context, exp time.Duration, info task.FileInfo, nonProxy bool) error {
 	if _, ok := g.pstats.Fids.LoadOrStore(info.Fid, struct{}{}); ok {
 		return errors.Wrap(errors.New("file is being processed"), "provide file error")
 	}
@@ -54,17 +54,22 @@ func (g *Gateway) ProvideFile(ctx context.Context, exp time.Duration, info task.
 		GroupSize: len(info.Fragments),
 		SubTasks:  make(map[string]task.ProvideSubTask),
 	}
-	hash, err := g.CreateStorageOrder(info)
+	var (
+		hash string
+		err  error
+	)
 	defer func() {
 		if err != nil {
 			g.pstats.Fids.Delete(info.Fid)
 		}
 	}()
-	if err != nil {
-
-		return errors.Wrap(err, "provide file error")
-	} else {
-		logger.GetLogger(config.LOG_PROVIDER).Infof("create storage order for file %s, tx hash is %s \n", info.Fid, hash)
+	if !nonProxy {
+		hash, err = g.CreateStorageOrder(info)
+		if err != nil {
+			return errors.Wrap(err, "provide file error")
+		} else {
+			logger.GetLogger(config.LOG_PROVIDER).Infof("create storage order for file %s, tx hash is %s \n", info.Fid, hash)
+		}
 	}
 
 	err = client.PutData(g.taskRecord, info.Fid, provideTask)
@@ -305,6 +310,10 @@ func (g *Gateway) CreateStorageOrder(info task.FileInfo) (string, error) {
 		info.Territory, segments, info.Owner, uint64(info.FileSize),
 	)
 	if err != nil {
+		if strings.Contains(err.Error(), "unreachable") {
+			jb, _ := json.Marshal(info)
+			logger.GetLogger(config.LOG_PROVIDER).Error(err, "; data: ", string(jb))
+		}
 		return "", errors.Wrap(err, "create storage order error")
 	}
 	return hash, nil

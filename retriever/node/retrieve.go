@@ -12,6 +12,7 @@ import (
 	"github.com/CD2N/CD2N/retriever/config"
 	"github.com/CD2N/CD2N/retriever/libs/client"
 	"github.com/CD2N/CD2N/retriever/libs/task"
+	"github.com/CD2N/CD2N/retriever/logger"
 	"github.com/CD2N/CD2N/retriever/utils"
 	"github.com/ipfs/go-cid"
 	"github.com/pkg/errors"
@@ -88,6 +89,7 @@ func (mg *Manager) RetrieveData(ctx context.Context, did, requester, reqId, extd
 	if err != nil {
 		return "", errors.Wrap(err, "retrieve data error")
 	}
+	logger.GetLogger(config.LOG_RETRIEVE).Info("new retrieve data task for fragment ", did)
 	timer := time.NewTimer(exp)
 	select {
 	case <-timer.C:
@@ -120,6 +122,7 @@ func (mg *Manager) ReceiveData(ctx context.Context, tid, provider, fpath string,
 	// if err = client.DeleteMessage(mg.redisCli, ctx, tid+"-dlock"); err != nil {
 	// 	return errors.Wrap(err, "receive data error")
 	// }
+	logger.GetLogger(config.LOG_RETRIEVE).Infof("receive data %s ,task id: %s", task.Did, tid)
 	mg.callbackCh <- tid
 	return nil
 }
