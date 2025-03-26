@@ -151,9 +151,11 @@ func (t *FileProvideTask) Do(fmg *FileManager) {
 
 func (t *FileProvideTask) FetchFile(fmg *FileManager) {
 	if item := fmg.Get(t.Did); item.Value != "" {
-		t.Path = item.Value
-		t.Callback(client.NewResponse(200, "success", t))
-		return
+		if fs, err := os.Stat(item.Value); err == nil && !fs.IsDir() && fs.Size() > 0 {
+			t.Path = item.Value
+			t.Callback(client.NewResponse(200, "success", t))
+			return
+		}
 	}
 	u, err := url.JoinPath(t.MinerAddr, "fragment")
 	if err != nil {

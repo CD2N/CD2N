@@ -103,7 +103,7 @@ func (m *ProvideManager) ProvideTaskCallback(e Event) {
 	}
 
 	if e.Status() != 200 {
-		logger.GetLogger(config.LOG_TASK).Error(e.Error())
+		logger.GetLogger(config.LOG_TASK).Error(e.Error(), " ", e.Result())
 		if task.TaskType == TYPE_RETRIEVE {
 			if err := client.DeleteData(m.files, task.Did); err != nil {
 				logger.GetLogger(config.LOG_TASK).Error(e.Error())
@@ -122,7 +122,7 @@ func (m *ProvideManager) ProvideTaskCallback(e Event) {
 		if item := m.Cache.Get(task.Did); item.Value != "" {
 			return
 		}
-		if fs, err := os.Stat(task.Path); err == nil {
+		if fs, err := os.Stat(task.Path); err == nil && !fs.IsDir() && fs.Size() > 0 {
 			m.Cache.AddWithData(task.Did, task.Path, fs.Size())
 		}
 	}
@@ -200,7 +200,7 @@ func (m *ProvideManager) StorageTaskCallback(e Event) {
 			return
 		}
 		if item := m.Cache.Get(task.Did); item.Key == "" || item.Value == "" {
-			if fs, err := os.Stat(task.Path); err == nil {
+			if fs, err := os.Stat(task.Path); err == nil && !fs.IsDir() && fs.Size() > 0 {
 				m.Cache.AddWithData(task.Did, task.Path, fs.Size())
 			}
 		}

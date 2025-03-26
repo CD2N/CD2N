@@ -310,6 +310,10 @@ func (g *Gateway) CreateStorageOrder(info task.FileInfo) (string, error) {
 		info.Territory, segments, info.Owner, uint64(info.FileSize),
 	)
 	if err != nil {
+		if strings.Contains(err.Error(), "unreachable") {
+			jb, _ := json.Marshal(info)
+			logger.GetLogger(config.LOG_PROVIDER).Error(err, "; data: ", string(jb))
+		}
 		return "", errors.Wrap(err, "create storage order error")
 	}
 	return hash, nil

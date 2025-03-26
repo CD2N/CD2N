@@ -19,6 +19,7 @@ require (
 	github.com/vedhavyas/go-subkey v1.0.4
 	github.com/vedhavyas/go-subkey/v2 v2.0.0
 	golang.org/x/exp v0.0.0-20241215155358-4a5509556b9e
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
 require (

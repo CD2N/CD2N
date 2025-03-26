@@ -1,11 +1,10 @@
 package logger
 
 import (
-	"os"
 	"sync"
 
-	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var (
@@ -44,11 +43,14 @@ func (lg *Logger) RegisterLogger(name, fpath, formatter string) (*logrus.Logger,
 	}
 
 	if fpath != "" {
-		f, err := os.OpenFile(fpath, os.O_APPEND|os.O_RDWR|os.O_CREATE, 0755)
-		if err != nil {
-			return nil, errors.Wrap(err, "register logger error")
+		l := &lumberjack.Logger{
+			Filename:   fpath,
+			MaxSize:    100,
+			MaxBackups: 5,
+			MaxAge:     30,
+			Compress:   true,
 		}
-		logger.SetOutput(f)
+		logger.SetOutput(l)
 	}
 	lg.rw.Lock()
 	lg.loggers[name] = logger

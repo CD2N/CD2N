@@ -144,6 +144,10 @@ func (h *ServerHandle) ProvideData(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "provide data error", err.Error()))
 		return
 	}
+	if file.Size <= 0 {
+		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "provide data error", "invalid data"))
+		return
+	}
 	metaStr := c.PostForm("metadata")
 	if metaStr == "" {
 		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "provide data error", "bad metadata"))
@@ -232,6 +236,10 @@ func (h *ServerHandle) SaveFileToBuf(file *multipart.FileHeader, fpath string) e
 	}
 	defer f.Close()
 	_, err = io.Copy(f, src)
+	if err != nil {
+		return errors.Wrap(err, "cache file error")
+	}
+	err = f.Sync()
 	return errors.Wrap(err, "cache file error")
 }
 
