@@ -11,13 +11,14 @@ import (
 	"time"
 
 	"github.com/CD2N/CD2N/retriever/config"
-	"github.com/CD2N/CD2N/retriever/libs/chain"
 	"github.com/CD2N/CD2N/retriever/libs/client"
 	"github.com/CD2N/CD2N/retriever/libs/task"
-	"github.com/CD2N/CD2N/retriever/logger"
 	"github.com/CD2N/CD2N/retriever/utils"
+	"github.com/CD2N/CD2N/sdk/sdkgo/chain"
+	"github.com/CD2N/CD2N/sdk/sdkgo/chain/evm"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
-	cess "github.com/CESSProject/cess-go-sdk/chain"
+	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
+	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/go-redis/redis/v8"
 	"github.com/panjf2000/ants/v2"
@@ -40,18 +41,18 @@ type Cd2nNode struct {
 
 type Gateway struct {
 	redisCli   *redis.Client
-	cessCli    cess.Chainer
+	cessCli    *chain.Client
 	taskRecord *leveldb.DB
 	nodes      *sync.Map
 	pool       *ants.Pool
 	pstats     *task.ProvideStat
-	contract   *chain.CacheProtoContract
+	contract   *evm.CacheProtoContract
 	DealMap    *sync.Map
 	FileCacher *buffer.FileBuffer
 	keyLock    *task.EasyKeyLock
 }
 
-func NewGateway(redisCli *redis.Client, contract *chain.CacheProtoContract, cacher *buffer.FileBuffer, taskRec *leveldb.DB) (*Gateway, error) {
+func NewGateway(redisCli *redis.Client, contract *evm.CacheProtoContract, cacher *buffer.FileBuffer, taskRec *leveldb.DB) (*Gateway, error) {
 	pool, err := ants.NewPool(256)
 	if err != nil {
 		return nil, errors.Wrap(err, "new gateway error")
@@ -283,4 +284,41 @@ func (g *Gateway) ProcessFile(buf *buffer.FileBuffer, name, fpath, territory str
 	}
 	finfo.Fid = hex.EncodeToString(hash.Sum(nil))
 	return finfo, nil
+}
+
+func (g *Gateway) CreateStorageOrder(info task.FileInfo) (string, error) {
+	var (
+		segments []chain.SegmentList
+		user     chain.UserBrief
+	)
+	for i, v := range info.Fragments {
+		segment := chain.SegmentList{
+			SegmentHash:  getFileHash(info.Segments[i]),
+			FragmentHash: make([]chain.FileHash, len(v)),
+		}
+		for j, fragment := range v {
+			segment.FragmentHash[j] = getFileHash(fragment)
+		}
+		segments = append(segments, segment)
+	}
+	acc, err := types.NewAccountID(info.Owner)
+	if err != nil {
+		return "", errors.Wrap(err, "create storage order error")
+	}
+	user.User = *acc
+	user.FileName = types.NewBytes([]byte(info.FileName))
+	user.TerriortyName = types.NewBytes([]byte(info.Territory))
+	hash, err := g.cessCli.UploadDeclaration(getFileHash(info.Fid), segments, user, uint64(info.FileSize), nil, nil)
+	if err != nil {
+		return hash, errors.Wrap(err, "create storage order error")
+	}
+	return hash, nil
+}
+
+func getFileHash(fid string) chain.FileHash {
+	var hash chain.FileHash
+	for i := 0; i < len(fid) && i < len(hash); i++ {
+		hash[i] = types.U8(fid[i])
+	}
+	return hash
 }

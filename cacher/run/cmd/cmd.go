@@ -10,12 +10,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/CD2N/CD2N/cacher/chain"
 	"github.com/CD2N/CD2N/cacher/client"
 	"github.com/CD2N/CD2N/cacher/config"
-	"github.com/CD2N/CD2N/cacher/logger"
 	"github.com/CD2N/CD2N/cacher/manager"
+	"github.com/CD2N/CD2N/sdk/sdkgo/chain/evm"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/cache"
+	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/go-redis/redis/v8"
 	"github.com/spf13/cobra"
@@ -76,17 +76,17 @@ func cmd_exit_func(cmd *cobra.Command, args []string) {
 		return
 	}
 	conf := config.GetConfig()
-	cli, err := chain.NewClient(
-		chain.AccountPrivateKey(conf.SecretKey),
-		chain.ChainID(conf.ChainId),
-		chain.ConnectionRpcAddresss(conf.Rpcs),
-		chain.EthereumGas(conf.GasFreeCap, conf.GasLimit),
+	cli, err := evm.NewClient(
+		evm.AccountPrivateKey(conf.SecretKey),
+		evm.ChainID(conf.ChainId),
+		evm.ConnectionRpcAddresss(conf.Rpcs),
+		evm.EthereumGas(conf.GasFreeCap, conf.GasLimit),
 	)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	contract, err := chain.NewProtoContract(
+	contract, err := evm.NewProtoContract(
 		cli.GetEthClient(),
 		conf.ProtoContract,
 		cli.Account.Hex(),
@@ -139,18 +139,18 @@ func cmd_run_func(cmd *cobra.Command, args []string) {
 		return
 	}
 
-	cli, err := chain.NewClient(
-		chain.AccountPrivateKey(conf.SecretKey),
-		chain.ChainID(conf.ChainId),
-		chain.ConnectionRpcAddresss(conf.Rpcs),
-		chain.EthereumGas(conf.GasFreeCap, conf.GasLimit),
+	cli, err := evm.NewClient(
+		evm.AccountPrivateKey(conf.SecretKey),
+		evm.ChainID(conf.ChainId),
+		evm.ConnectionRpcAddresss(conf.Rpcs),
+		evm.EthereumGas(conf.GasFreeCap, conf.GasLimit),
 	)
 	if err != nil {
 		log.Println("init ethereum client error", err)
 		return
 	}
 
-	contract, err := chain.NewProtoContract(
+	contract, err := evm.NewProtoContract(
 		cli.GetEthClient(),
 		conf.ProtoContract,
 		cli.Account.Hex(),
@@ -174,7 +174,7 @@ func cmd_run_func(cmd *cobra.Command, args []string) {
 				log.Println("decode sign error", err)
 				return
 			}
-			if err = contract.RegisterNode(context.Background(), chain.RegisterReq{
+			if err = contract.RegisterNode(context.Background(), evm.RegisterReq{
 				NodeAcc:   cli.Account,
 				TokenAcc:  common.HexToAddress(conf.TokenAcc),
 				Endpoint:  conf.Endpoint,

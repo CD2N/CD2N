@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/CD2N/CD2N/retriever/config"
-	"github.com/CD2N/CD2N/retriever/logger"
+	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
 	"github.com/ipfs/boxo/files"
 	"github.com/ipfs/boxo/path"
 	"github.com/ipfs/go-cid"

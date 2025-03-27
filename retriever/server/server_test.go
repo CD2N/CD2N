@@ -13,15 +13,12 @@ import (
 	"time"
 
 	"github.com/CD2N/CD2N/retriever/config"
-	"github.com/CD2N/CD2N/retriever/libs/chain"
 	"github.com/CD2N/CD2N/retriever/libs/client"
 	"github.com/CD2N/CD2N/retriever/libs/task"
 	utils2 "github.com/CD2N/CD2N/retriever/utils"
 	"github.com/CESSProject/cess-go-sdk/utils"
 	ecies "github.com/ecies/go/v2"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/pkg/errors"
 )
 
 func TestChannel(t *testing.T) {
@@ -158,40 +155,40 @@ func TestQueryTEEInfo(t *testing.T) {
 	t.Log(data)
 }
 
-func TestCreateCacheOrder(t *testing.T) {
-	cli, err := chain.NewClient(
-		chain.AccountPrivateKey("b22dbc78effaba221dcc12557def7aceca27bc3727f0d1a078b682bce2fe4ff8"),
-		chain.ChainID(11330),
-		chain.ConnectionRpcAddresss([]string{"wss://testnet-rpc.cess.cloud/ws/"}),
-		chain.EthereumGas(1086940004600, 30000000),
-	)
-	if err != nil {
-		t.Fatal(errors.Wrap(err, "register node error"))
-	}
+// func TestCreateCacheOrder(t *testing.T) {
+// 	cli, err := chain.NewClient(
+// 		chain.AccountPrivateKey("b22dbc78effaba221dcc12557def7aceca27bc3727f0d1a078b682bce2fe4ff8"),
+// 		chain.ChainID(11330),
+// 		chain.ConnectionRpcAddresss([]string{"wss://testnet-rpc.cess.cloud/ws/"}),
+// 		chain.EthereumGas(1086940004600, 30000000),
+// 	)
+// 	if err != nil {
+// 		t.Fatal(errors.Wrap(err, "register node error"))
+// 	}
 
-	contract, err := chain.NewProtoContract(
-		cli.GetEthClient(),
-		"0xD185AF24121d0D6a9A3e128fB27C3704569b5E91",
-		"cdce8911cc893c792cd93508322e7d3dda9c6625fb5aea8f157668680491502e",
-		cli.NewTransactionOption,
-		cli.SubscribeFilterLogs,
-	)
-	if err != nil {
-		t.Fatal(errors.Wrap(err, "register node error"))
-	}
+// 	contract, err := chain.NewProtoContract(
+// 		cli.GetEthClient(),
+// 		"0xD185AF24121d0D6a9A3e128fB27C3704569b5E91",
+// 		"cdce8911cc893c792cd93508322e7d3dda9c6625fb5aea8f157668680491502e",
+// 		cli.NewTransactionOption,
+// 		cli.SubscribeFilterLogs,
+// 	)
+// 	if err != nil {
+// 		t.Fatal(errors.Wrap(err, "register node error"))
+// 	}
 
-	// reward, err := contract.QueryNodeReward(common.HexToAddress("0x40907feE3e02465D39Ef05f7d714294D89F6d4f7"))
-	// if err != nil {
-	// 	t.Fatal(errors.Wrap(err, "register node error"))
-	// }
-	// t.Log("node reward:", reward)
+// 	// reward, err := contract.QueryNodeReward(common.HexToAddress("0x40907feE3e02465D39Ef05f7d714294D89F6d4f7"))
+// 	// if err != nil {
+// 	// 	t.Fatal(errors.Wrap(err, "register node error"))
+// 	// }
+// 	// t.Log("node reward:", reward)
 
-	hash, err := contract.CreateCacheOrder(context.Background(), common.HexToAddress("0x47a778bAE665A1c63c53F1C2FeF39AE3551B4B9B"), "100000000000")
-	if err != nil {
-		t.Fatal(errors.Wrap(err, "create cache order error"))
-	}
-	t.Log("success, tx hash", hash)
-}
+// 	hash, err := contract.CreateCacheOrder(context.Background(), common.HexToAddress("0x47a778bAE665A1c63c53F1C2FeF39AE3551B4B9B"), "100000000000")
+// 	if err != nil {
+// 		t.Fatal(errors.Wrap(err, "create cache order error"))
+// 	}
+// 	t.Log("success, tx hash", hash)
+// }
 
 func TestAudit(t *testing.T) {
 	teeEndpoint := "http://139.180.142.180:1309"

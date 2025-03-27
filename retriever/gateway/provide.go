@@ -9,13 +9,13 @@ import (
 	"time"
 
 	"github.com/CD2N/CD2N/retriever/config"
-	"github.com/CD2N/CD2N/retriever/libs/chain"
 	"github.com/CD2N/CD2N/retriever/libs/client"
 	"github.com/CD2N/CD2N/retriever/libs/task"
-	"github.com/CD2N/CD2N/retriever/logger"
 	"github.com/CD2N/CD2N/retriever/utils"
+	"github.com/CD2N/CD2N/sdk/sdkgo/chain"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
-	cess "github.com/CESSProject/cess-go-sdk/chain"
+	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
+	"github.com/CD2N/CD2N/sdk/sdkgo/retriever"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/pkg/errors"
 )
@@ -228,7 +228,7 @@ func (g *Gateway) checker(ctx context.Context, buffer *buffer.FileBuffer) error 
 				logger.GetLogger(config.LOG_PROVIDER).Error(err)
 				return nil
 			}
-			cmpSet, err := chain.QueryDealMap(cli, fid)
+			cmpSet, err := retriever.QueryDealMap(cli, fid)
 			if err == nil {
 				for k, v := range ftask.SubTasks {
 					if _, ok := cmpSet[v.GroupId+1]; v.Index == ftask.GroupSize && ok {
@@ -293,40 +293,45 @@ func RemoveSubTaskFiles(buffer *buffer.FileBuffer, groupId int, ftask task.Provi
 	return nil
 }
 
-func (g *Gateway) CreateStorageOrder(info task.FileInfo) (string, error) {
-	var segments []cess.SegmentDataInfo
-	for i, v := range info.Fragments {
-		segments = append(segments, cess.SegmentDataInfo{
-			SegmentHash:  info.Segments[i],
-			FragmentHash: v,
-		})
-	}
-	cli, err := g.GetCessClient()
-	if err != nil {
-		return "", errors.Wrap(err, "create storage order error")
-	}
-	hash, err := chain.CreateStorageOrder(
-		cli, info.Fid, info.FileName,
-		info.Territory, segments, info.Owner, uint64(info.FileSize),
-	)
-	if err != nil {
-		if strings.Contains(err.Error(), "unreachable") {
-			jb, _ := json.Marshal(info)
-			logger.GetLogger(config.LOG_PROVIDER).Error(err, "; data: ", string(jb))
-		}
-		return "", errors.Wrap(err, "create storage order error")
-	}
-	return hash, nil
-}
+// func (g *Gateway) CreateStorageOrder(info task.FileInfo) (string, error) {
+// 	var segments []cess.SegmentDataInfo
+// 	for i, v := range info.Fragments {
+// 		segments = append(segments, cess.SegmentDataInfo{
+// 			SegmentHash:  info.Segments[i],
+// 			FragmentHash: v,
+// 		})
+// 	}
+// 	cli, err := g.GetCessClient()
+// 	if err != nil {
+// 		return "", errors.Wrap(err, "create storage order error")
+// 	}
+// 	hash, err := chain.CreateStorageOrder(
+// 		cli, info.Fid, info.FileName,
+// 		info.Territory, segments, info.Owner, uint64(info.FileSize),
+// 	)
+// 	if err != nil {
+// 		if strings.Contains(err.Error(), "unreachable") {
+// 			jb, _ := json.Marshal(info)
+// 			logger.GetLogger(config.LOG_PROVIDER).Error(err, "; data: ", string(jb))
+// 		}
+// 		return "", errors.Wrap(err, "create storage order error")
+// 	}
+// 	return hash, nil
+// }
 
-func (g *Gateway) GetCessClient() (cess.Chainer, error) {
+func (g *Gateway) GetCessClient() (*chain.Client, error) {
+
 	if g.cessCli != nil {
-		if _, err := g.cessCli.QueryBlockNumber(""); err == nil {
+		if _, err := g.cessCli.RPC.Chain.GetBlockHash(0); err == nil {
 			return g.cessCli, nil
 		}
+		if err := g.cessCli.RefreshSubstrateApi(); err != nil {
+			return nil, errors.Wrap(err, "get cess client error")
+		}
+		return g.cessCli, nil
 	}
 	conf := config.GetConfig()
-	cli, err := chain.NewCessChainClient(context.Background(), conf.Mnemonic, conf.Rpcs)
+	cli, err := chain.NewLightCessClient(conf.Mnemonic, conf.Rpcs)
 	if err != nil {
 		return nil, errors.Wrap(err, "get cess client error")
 	}

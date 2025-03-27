@@ -94,3 +94,13 @@ type PoISKeyInfo struct {
 	G AccBytes
 	N AccBytes
 }
+
+type BucketInfo struct {
+	FileList  []FileHash
+	Authority []types.AccountID
+}
+
+type OssInfo struct {
+	Peerid [38]types.U8
+	Domain types.Bytes
+}
