@@ -11,12 +11,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/CD2N/CD2N/cacher/chain"
 	"github.com/CD2N/CD2N/cacher/client"
 	"github.com/CD2N/CD2N/cacher/config"
-	"github.com/CD2N/CD2N/cacher/logger"
 	"github.com/CD2N/CD2N/cacher/utils"
+	"github.com/CD2N/CD2N/sdk/sdkgo/chain"
+	"github.com/CD2N/CD2N/sdk/sdkgo/chain/evm"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/cache"
+	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
 	"github.com/go-redis/redis/v8"
 	"github.com/panjf2000/ants/v2"
@@ -69,11 +70,11 @@ type ProvideManager struct {
 	staskMap  *sync.Map
 	taskChan  chan<- FileTask
 	//fileMg    *FileManager
-	cli  *chain.CacheProtoContract
+	cli  *evm.CacheProtoContract
 	temp string
 }
 
-func NewProvideManager(c *cache.Cache, ch chan<- FileTask, cli *chain.CacheProtoContract, fdbPath, tempDir string) (*ProvideManager, error) {
+func NewProvideManager(c *cache.Cache, ch chan<- FileTask, cli *evm.CacheProtoContract, fdbPath, tempDir string) (*ProvideManager, error) {
 	files, err := client.NewDB(fdbPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "new provide manager error")
@@ -231,14 +232,14 @@ func (m *ProvideManager) StorageTaskChecker(ctx context.Context) error {
 	for {
 		select {
 		case <-ticker.C:
-			chainCli, err := chain.NewCessChainClient(context.Background(), config.GetConfig().Rpcs)
+			chainCli, err := chain.NewLightCessClient("", config.GetConfig().Rpcs)
 			if err != nil {
 				logger.GetLogger(config.LOG_NODE).Error("new cess chain client error", err)
 				continue
 			}
 			m.staskMap.Range(func(key, value any) bool {
 				task := value.(*FileStorageTask)
-				order, err := chainCli.QueryDealMap(task.Fid, -1)
+				order, err := chainCli.QueryDealMap(task.Fid, 0)
 				if err != nil {
 					logger.GetLogger(config.LOG_NODE).Error("check storage order error", err)
 					return true
@@ -258,7 +259,7 @@ func (m *ProvideManager) StorageTaskChecker(ctx context.Context) error {
 				m.taskChan <- task
 				return true
 			})
-			chainCli.Close()
+			chainCli.Client.Close()
 		case <-ctx.Done():
 			return errors.New("context done")
 		}
@@ -308,11 +309,11 @@ func (m *ProvideManager) GetFileInfo(did, fid string, net uint16) (FileInfo, err
 	if fid == "" {
 		return finfo, errors.Wrap(errors.New("file info not found"), "get file info error")
 	}
-	chainCli, err := chain.NewCessChainClient(context.Background(), config.GetConfig().Rpcs)
+	chainCli, err := chain.NewLightCessClient("", config.GetConfig().Rpcs)
 	if err != nil {
 		return finfo, errors.Wrap(err, "get file info error")
 	}
-	fmeta, err := chainCli.QueryFile(fid, -1)
+	fmeta, err := chainCli.QueryFileMetadata(fid, 0)
 	if err != nil {
 		return finfo, errors.Wrap(err, "get file info error")
 	}
@@ -414,11 +415,11 @@ func (m *ProvideManager) LoadStorageNodes(conf config.Config) error {
 	if err != nil {
 		return err
 	}
-	chainCli, err := chain.NewCessChainClient(context.Background(), conf.Rpcs)
+	chainCli, err := chain.NewLightCessClient("", conf.Rpcs)
 	if err != nil {
 		return errors.Wrap(err, "load storage nodes error")
 	}
-	defer chainCli.Close()
+	defer chainCli.Client.Close()
 	for _, miner := range conf.StorageNodes {
 		acc, err := utils.ParsingPublickey(miner.Account)
 		if err != nil {
@@ -429,7 +430,7 @@ func (m *ProvideManager) LoadStorageNodes(conf config.Config) error {
 			Account:  miner.Account,
 			Endpoint: miner.Endpoint,
 		}
-		info, err := chainCli.QueryMinerItems(acc, -1)
+		info, err := chainCli.QueryMinerItems(acc, 0)
 		if err != nil {
 			logger.GetLogger(config.LOG_NODE).Error(err.Error())
 			continue
@@ -457,7 +458,7 @@ func (m *ProvideManager) LoadStorageNodes(conf config.Config) error {
 			Account:  acc,
 			Endpoint: endpoint,
 		}
-		info, err := chainCli.QueryMinerItems(keyring.PublicKey, -1)
+		info, err := chainCli.QueryMinerItems(keyring.PublicKey, 0)
 		if err != nil {
 			logger.GetLogger(config.LOG_NODE).Error(err.Error())
 			continue
@@ -521,7 +522,7 @@ func (m *ProvideManager) UpdateStorageNodeStatus(ctx context.Context, conf confi
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			chainCli, err := chain.NewCessChainClient(context.Background(), conf.Rpcs)
+			chainCli, err := chain.NewLightCessClient("", conf.Rpcs)
 			if err != nil {
 				logger.GetLogger(config.LOG_NODE).Error("update storage status error ", err.Error())
 				continue
@@ -533,7 +534,7 @@ func (m *ProvideManager) UpdateStorageNodeStatus(ctx context.Context, conf confi
 					logger.GetLogger(config.LOG_NODE).Error("update storage status error ", err.Error())
 					return true
 				}
-				info, err := chainCli.QueryMinerItems(acc, -1)
+				info, err := chainCli.QueryMinerItems(acc, 0)
 				if err != nil {
 					logger.GetLogger(config.LOG_NODE).Error("update storage status error ", err.Error())
 					return true
@@ -544,7 +545,7 @@ func (m *ProvideManager) UpdateStorageNodeStatus(ctx context.Context, conf confi
 				m.storagers.Store(key, node)
 				return true
 			})
-			chainCli.Close()
+			chainCli.Client.Close()
 		}
 	}
 }

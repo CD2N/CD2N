@@ -14,9 +14,9 @@ import (
 
 	"github.com/CD2N/CD2N/retriever/config"
 	"github.com/CD2N/CD2N/retriever/libs/client"
-	"github.com/CD2N/CD2N/retriever/logger"
+	"github.com/CD2N/CD2N/sdk/sdkgo/chain"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
-	"github.com/CESSProject/cess-go-sdk/chain"
+	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 )
@@ -74,7 +74,7 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 			client.NewResponse(http.StatusInternalServerError, "download file error", err.Error()))
 		return
 	}
-	fmeta, err := cessCli.QueryFile(fid, -1)
+	fmeta, err := cessCli.QueryFileMetadata(fid, 0)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError,
 			client.NewResponse(http.StatusInternalServerError, "download file error", err.Error()))
@@ -257,7 +257,7 @@ func (h *ServerHandle) GetFileName(fid string) (string, error) {
 	if err != nil {
 		return fname, errors.Wrap(err, "get file name error")
 	}
-	meta, err := cli.QueryFile(fid, -1)
+	meta, err := cli.QueryFileMetadata(fid, 0)
 	if err == nil {
 		for _, owner := range meta.Owner {
 			fname = string(owner.FileName)
@@ -266,7 +266,7 @@ func (h *ServerHandle) GetFileName(fid string) (string, error) {
 			}
 		}
 	}
-	dealmap, err := cli.QueryDealMap(fid, -1)
+	dealmap, err := cli.QueryDealMap(fid, 0)
 	if err != nil {
 		return fname, errors.Wrap(err, "get file name error")
 	}

@@ -57,16 +57,14 @@ func (c *Client) MintTerritory(name string, gibCount, days uint32, caller *signa
 	if name == "" || gibCount == 0 || days == 0 {
 		return "", errors.Wrap(errors.New("bad args"), "mint territory error")
 	}
-	var key signature.KeyringPair
-	if caller == nil {
-		if c.KeyringManager == nil {
-			return "", errors.Wrap(errors.New("invalid tx sender"), "mint territory error")
-		}
-		key = c.GetKeyRandomly()
-		defer c.PutKey(key.Address)
-	} else {
-		key = *caller
+	key, err := c.GetCaller(caller)
+	if err != nil {
+		return "", errors.Wrap(err, "mint territory error")
 	}
+	if caller == nil {
+		defer c.PutKey(key.Address)
+	}
+
 	newcall, err := types.NewCall(
 		c.Metadata, "StorageHandler.mint_territory",
 		types.NewU32(gibCount), types.NewBytes([]byte(name)), types.NewU32(days),
@@ -87,22 +85,20 @@ func (c *Client) ExpandingTerritory(name string, gibCount uint32, caller *signat
 	if name == "" || gibCount == 0 {
 		return "", errors.Wrap(errors.New("bad args"), "expanding territory error")
 	}
-	var key signature.KeyringPair
-	if caller == nil {
-		if c.KeyringManager == nil {
-			return "", errors.Wrap(errors.New("invalid tx sender"), "expanding territory error")
-		}
-		key = c.GetKeyRandomly()
-		defer c.PutKey(key.Address)
-	} else {
-		key = *caller
+	key, err := c.GetCaller(caller)
+	if err != nil {
+		return "", errors.Wrap(err, "expanding territory error")
 	}
+	if caller == nil {
+		defer c.PutKey(key.Address)
+	}
+
 	newcall, err := types.NewCall(
 		c.Metadata, "StorageHandler.expanding_territory",
 		types.NewBytes([]byte(name)), types.NewU32(gibCount),
 	)
 	if err != nil {
-		return "", errors.Wrap(err, "mexpandingint territory error")
+		return "", errors.Wrap(err, "expanding territory error")
 	}
 
 	blockhash, err := c.SubmitExtrinsic(key, newcall, "StorageHandler.expanding_territory", event, c.Timeout)
@@ -117,16 +113,14 @@ func (c *Client) RenewalTerritory(name string, days uint32, caller *signature.Ke
 	if name == "" || days == 0 {
 		return "", errors.Wrap(errors.New("bad args"), "renewal territory error")
 	}
-	var key signature.KeyringPair
-	if caller == nil {
-		if c.KeyringManager == nil {
-			return "", errors.Wrap(errors.New("invalid tx sender"), "renewal territory error")
-		}
-		key = c.GetKeyRandomly()
-		defer c.PutKey(key.Address)
-	} else {
-		key = *caller
+	key, err := c.GetCaller(caller)
+	if err != nil {
+		return "", errors.Wrap(err, "renewal territory error")
 	}
+	if caller == nil {
+		defer c.PutKey(key.Address)
+	}
+
 	newcall, err := types.NewCall(
 		c.Metadata, "StorageHandler.renewal_territory",
 		types.NewBytes([]byte(name)), types.NewU32(days),
@@ -147,16 +141,14 @@ func (c *Client) ReactivateTerritory(name string, days uint32, caller *signature
 	if name == "" || days == 0 {
 		return "", errors.Wrap(errors.New("bad args"), "reactivate territory error")
 	}
-	var key signature.KeyringPair
-	if caller == nil {
-		if c.KeyringManager == nil {
-			return "", errors.Wrap(errors.New("invalid tx sender"), "reactivate territory error")
-		}
-		key = c.GetKeyRandomly()
-		defer c.PutKey(key.Address)
-	} else {
-		key = *caller
+	key, err := c.GetCaller(caller)
+	if err != nil {
+		return "", errors.Wrap(err, "reactivate territory error")
 	}
+	if caller == nil {
+		defer c.PutKey(key.Address)
+	}
+
 	newcall, err := types.NewCall(
 		c.Metadata, "StorageHandler.reactivate_territory",
 		types.NewBytes([]byte(name)), types.NewU32(days),

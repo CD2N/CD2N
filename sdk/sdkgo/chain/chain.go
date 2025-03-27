@@ -276,6 +276,19 @@ func QueryStorages[T any](c *Client, block uint32, prefix, method string) ([]T, 
 	return datas, nil
 }
 
+func (c *Client) GetCaller(caller *signature.KeyringPair) (signature.KeyringPair, error) {
+	var key signature.KeyringPair
+	if caller == nil {
+		if c.KeyringManager == nil {
+			return key, errors.New("invalid tx sender")
+		}
+		key = c.GetKeyInOrder()
+	} else {
+		key = *caller
+	}
+	return key, nil
+}
+
 func createPrefixedKey(method, prefix string) []byte {
 	return append(xxhash.New128([]byte(prefix)).Sum(nil), xxhash.New128([]byte(method)).Sum(nil)...)
 }

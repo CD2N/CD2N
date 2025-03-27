@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 
 	"github.com/CD2N/CD2N/retriever/config"
-	"github.com/CD2N/CD2N/retriever/logger"
 	"github.com/CD2N/CD2N/retriever/server"
+	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
 )
 
 func main() {

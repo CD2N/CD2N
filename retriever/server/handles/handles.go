@@ -16,11 +16,11 @@ import (
 	"github.com/CD2N/CD2N/retriever/gateway"
 	"github.com/CD2N/CD2N/retriever/libs/chain"
 	"github.com/CD2N/CD2N/retriever/libs/client"
-	"github.com/CD2N/CD2N/retriever/logger"
 	"github.com/CD2N/CD2N/retriever/node"
 	"github.com/CD2N/CD2N/retriever/utils"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/cache"
+	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
 	"github.com/decred/base58"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gin-gonic/gin"
@@ -265,7 +265,7 @@ func (h *ServerHandle) registerOssNode(conf config.Config) error {
 	if err != nil {
 		return errors.Wrap(err, "register OSS node on chain error")
 	}
-	if _, err = cli.QueryOss(cli.GetSignatureAccPulickey(), -1); err == nil {
+	if _, err = cli.QueryOss(cli.GetKeyInOrder().PublicKey, -1); err == nil {
 		return nil
 	}
 	hash, err := cli.RegisterOss(conf.Endpoint)

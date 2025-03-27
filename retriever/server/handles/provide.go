@@ -7,7 +7,7 @@ import (
 	"github.com/CD2N/CD2N/retriever/config"
 	"github.com/CD2N/CD2N/retriever/gateway"
 	"github.com/CD2N/CD2N/retriever/libs/client"
-	"github.com/CD2N/CD2N/retriever/logger"
+	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
 	"github.com/gin-gonic/gin"
 )
 

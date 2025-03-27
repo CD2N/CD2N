@@ -71,15 +71,12 @@ func (c *Client) QueryUserFileList(accountID []byte, block uint32) ([]UserFileSl
 
 func (c *Client) UploadDeclaration(fid FileHash, segment []SegmentList, user UserBrief, filesize uint64, caller *signature.KeyringPair, event any) (string, error) {
 
-	var key signature.KeyringPair
+	key, err := c.GetCaller(caller)
+	if err != nil {
+		return "", errors.Wrap(err, "upload file declaration error")
+	}
 	if caller == nil {
-		if c.KeyringManager == nil {
-			return "", errors.Wrap(errors.New("invalid tx sender"), "upload file declaration error")
-		}
-		key = c.GetKeyRandomly()
 		defer c.PutKey(key.Address)
-	} else {
-		key = *caller
 	}
 
 	newcall, err := types.NewCall(c.Metadata, "FileBank.upload_declaration", fid, segment, user, types.NewU128(*new(big.Int).SetUint64(filesize)))
@@ -95,16 +92,14 @@ func (c *Client) UploadDeclaration(fid FileHash, segment []SegmentList, user Use
 }
 
 func (c *Client) DeleteUserFile(fid FileHash, owner types.AccountID, caller *signature.KeyringPair, event any) (string, error) {
-	var key signature.KeyringPair
-	if caller == nil {
-		if c.KeyringManager == nil {
-			return "", errors.Wrap(errors.New("invalid tx sender"), "delete user file error")
-		}
-		key = c.GetKeyRandomly()
-		defer c.PutKey(key.Address)
-	} else {
-		key = *caller
+	key, err := c.GetCaller(caller)
+	if err != nil {
+		return "", errors.Wrap(err, "delete user file error")
 	}
+	if caller == nil {
+		defer c.PutKey(key.Address)
+	}
+
 	newcall, err := types.NewCall(c.Metadata, "FileBank.delete_file", owner, fid)
 	if err != nil {
 		return "", errors.Wrap(err, "delete user file error")

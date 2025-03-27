@@ -16,10 +16,10 @@ import (
 	"github.com/CD2N/CD2N/retriever/config"
 	"github.com/CD2N/CD2N/retriever/libs/client"
 	"github.com/CD2N/CD2N/retriever/libs/task"
-	"github.com/CD2N/CD2N/retriever/logger"
 	"github.com/CD2N/CD2N/retriever/server/auth"
 	"github.com/CD2N/CD2N/retriever/utils"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
+	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 )
@@ -351,7 +351,7 @@ func (h *ServerHandle) AsyncUploadFiles(ctx context.Context) error {
 					logger.GetLogger(config.LOG_GATEWAY).Info("provide file async error ", err)
 					return nil
 				}
-				_, err = cli.QueryDealMap(box.Info.Fid, -1)
+				_, err = cli.QueryDealMap(box.Info.Fid, 0)
 				if err != nil {
 					logger.GetLogger(config.LOG_GATEWAY).Info("provide file async error ", err)
 					return nil
