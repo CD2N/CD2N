@@ -1,6 +1,11 @@
 package chain
 
-import "github.com/centrifuge/go-substrate-rpc-client/v4/types"
+import (
+	"bytes"
+
+	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
+	"github.com/vedhavyas/go-subkey/scale"
+)
 
 type FileHash [64]types.U8
 type AccBytes [256]types.U8
@@ -103,4 +108,19 @@ type BucketInfo struct {
 type OssInfo struct {
 	Peerid [38]types.U8
 	Domain types.Bytes
+}
+
+type SignPayload struct {
+	Oss types.AccountID
+	Exp types.U32
+}
+
+func (p SignPayload) EncodeSignPayload() ([]byte, error) {
+	buf := bytes.NewBuffer(nil)
+	s := scale.NewEncoder(buf)
+	err := s.Encode(p)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }

@@ -3,7 +3,7 @@ module github.com/CD2N/CD2N/retriever
 go 1.23.0
 
 require (
-	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250326075856-fdda6334cf3a
+	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250327055115-261f977f9fee
 	github.com/CESSProject/cess-go-sdk v0.7.0
 	github.com/decred/base58 v1.0.5
 	github.com/ecies/go/v2 v2.0.10
@@ -18,18 +18,20 @@ require (
 	github.com/mholt/archiver v3.1.1+incompatible
 	github.com/panjf2000/ants/v2 v2.10.0
 	github.com/pkg/errors v0.9.1
-	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/viper v1.19.0
 	github.com/syndtr/goleveldb v1.0.1-0.20210819022825-2ae1ddf74ef7
 	github.com/vedhavyas/go-subkey v1.0.4
 	github.com/vedhavyas/go-subkey/v2 v2.0.0
 	golang.org/x/crypto v0.33.0
-	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v2 v2.4.0
 )
 
 require (
-	github.com/AstaFrode/go-substrate-rpc-client/v4 v4.2.4 // indirect
+	github.com/sirupsen/logrus v1.9.3 // indirect
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
+)
+
+require (
 	github.com/ChainSafe/go-schnorrkel v1.1.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/alecthomas/units v0.0.0-20240626203959-61d1e3462e30 // indirect

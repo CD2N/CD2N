@@ -247,7 +247,7 @@ func (g *Gateway) ProcessFile(buf *buffer.FileBuffer, name, fpath, territory str
 		if n, err := f.Read(fbuf); err != nil {
 			return task.FileInfo{}, errors.Wrap(err, "process file error")
 		} else if n < config.SEGMENT_SIZE {
-			if err = utils.FillRandData(fbuf[n:]); err != nil {
+			if err = utils.FillZeroData(fbuf[n:]); err != nil {
 				return task.FileInfo{}, errors.Wrap(err, "process file error")
 			}
 		}

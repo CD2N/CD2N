@@ -57,3 +57,15 @@ type EventRenewalSpace struct {
 	Fee         types.U128
 	Topics      []types.Hash
 }
+
+type EventPaidOrder struct {
+	Phase     types.Phase
+	OrderHash []types.U8
+	Topics    []types.Hash
+}
+
+type EventCreatePayOrder struct {
+	Phase     types.Phase
+	OrderHash []types.U8
+	Topics    []types.Hash
+}

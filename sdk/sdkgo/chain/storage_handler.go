@@ -164,3 +164,88 @@ func (c *Client) ReactivateTerritory(name string, days uint32, caller *signature
 
 	return blockhash, nil
 }
+
+func (c *Client) CreateTerritoryOrder(account []byte, name string, orderType uint8, gibCount, days, expired uint32, caller *signature.KeyringPair, event any) (string, error) {
+	key, err := c.GetCaller(caller)
+	if err != nil {
+		return "", errors.Wrap(err, "create territory order error")
+	}
+	if caller == nil {
+		defer c.PutKey(key.Address)
+	}
+
+	addr, err := types.NewAccountID(account)
+	if err != nil {
+		return "", errors.Wrap(err, "create territory order error")
+	}
+	newcall, err := types.NewCall(
+		c.Metadata, "StorageHandler.create_order", *addr,
+		types.NewBytes([]byte(name)), types.NewU8(orderType),
+		types.NewU32(gibCount), types.NewU32(days), types.NewU32(expired),
+	)
+
+	if err != nil {
+		return "", errors.Wrap(err, "create territory order error")
+	}
+
+	blockhash, err := c.SubmitExtrinsic(key, newcall, "StorageHandler.create_order", event, c.Timeout)
+	if err != nil {
+		return "", errors.Wrap(err, "create territory order error")
+	}
+
+	return blockhash, nil
+}
+
+func (c *Client) ExecTerritoryOrder(orderId []byte, caller *signature.KeyringPair, event any) (string, error) {
+	key, err := c.GetCaller(caller)
+	if err != nil {
+		return "", errors.Wrap(err, "exec territory order error")
+	}
+	if caller == nil {
+		defer c.PutKey(key.Address)
+	}
+	newcall, err := types.NewCall(c.Metadata, "StorageHandler.exec_order", types.NewBytes(orderId))
+	if err != nil {
+		return "", errors.Wrap(err, "exec territory order error")
+	}
+
+	blockhash, err := c.SubmitExtrinsic(key, newcall, "StorageHandler.exec_order", event, c.Timeout)
+	if err != nil {
+		return "", errors.Wrap(err, "exec territory order error")
+	}
+
+	return blockhash, nil
+}
+
+func (c *Client) GetOssProxyAuthSign(mnemonic, oss string) ([]byte, []byte, error) {
+
+	keyring, err := signature.KeyringPairFromSecret(mnemonic, 11331)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "get oss porxy auth error")
+	}
+	ossPk, err := ParsingPublickey(oss)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "get oss porxy auth error")
+	}
+	ossAccid, err := types.NewAccountID(ossPk)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "get oss porxy auth error")
+	}
+	num, err := c.QueryBlockNumber("")
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "get oss porxy auth error")
+	}
+	pld := SignPayload{
+		Oss: *ossAccid,
+		Exp: types.NewU32(num),
+	}
+	body, err := pld.EncodeSignPayload()
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "get oss porxy auth error")
+	}
+	sign, err := SignedSR25519WithMnemonic(keyring.URI, append([]byte("<Bytes>"), append(body, []byte("</Bytes>")...)...))
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "get oss porxy auth error")
+	}
+	return keyring.PublicKey, sign, nil
+}
