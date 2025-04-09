@@ -176,36 +176,38 @@ func (c *Client) SubmitExtrinsic(keypair signature.KeyringPair, call types.Call,
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 
-	select {
-	case status := <-sub.Chan():
-		if !status.IsInBlock {
-			return hash, errors.Wrap(errors.New("tx not confirmed"), "submit extrinsic error")
-		}
-		hash = status.AsInBlock.Hex()
-		if eventName == "" {
-			return hash, nil
-		}
-		events, err := c.Retriever.GetEvents(status.AsInBlock)
-		if err != nil {
-			return hash, errors.Wrap(err, "submit extrinsic error")
-		}
-		for _, e := range events {
-			if e.Name != eventName {
+	for {
+		select {
+		case status := <-sub.Chan():
+			if !status.IsInBlock {
 				continue
 			}
-			if event == nil {
+			hash = status.AsInBlock.Hex()
+			if eventName == "" {
 				return hash, nil
 			}
-			if err = DecodeEvent(e, event); err != nil {
+			events, err := c.Retriever.GetEvents(status.AsInBlock)
+			if err != nil {
 				return hash, errors.Wrap(err, "submit extrinsic error")
 			}
-			break
+			for _, e := range events {
+				if e.Name != eventName {
+					continue
+				}
+				if event == nil {
+					return hash, nil
+				}
+				if err = DecodeEvent(e, event); err != nil {
+					return hash, errors.Wrap(err, "submit extrinsic error")
+				}
+				break
+			}
+			return hash, nil
+		case err = <-sub.Err():
+			return hash, errors.Wrap(err, "submit extrinsic error")
+		case <-timer.C:
+			return hash, errors.Wrap(errors.New("timeout"), "submit extrinsic error")
 		}
-		return hash, nil
-	case err = <-sub.Err():
-		return hash, errors.Wrap(err, "submit extrinsic error")
-	case <-timer.C:
-		return hash, errors.Wrap(errors.New("timeout"), "submit extrinsic error")
 	}
 }
 

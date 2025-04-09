@@ -7,7 +7,7 @@ DiskConfig:
 ChainConfig:
   ChainId: 11330
   Rpcs:
-    - "wss://testnet-rpc.cess.cloud"
+    - "wss://testnet-rpc.cess.network"
   ProtoContract: "0xD185AF24121d0D6a9A3e128fB27C3704569b5E91"
   RechargeSize: 8589934592 #8
 
