@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"log"
+	"math/big"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,6 +16,8 @@ import (
 	"github.com/CD2N/CD2N/retriever/gateway"
 	"github.com/CD2N/CD2N/retriever/libs/client"
 	"github.com/CD2N/CD2N/retriever/node"
+	"github.com/CD2N/CD2N/retriever/utils"
+	"github.com/CD2N/CD2N/sdk/sdkgo/chain"
 	"github.com/CD2N/CD2N/sdk/sdkgo/chain/evm"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/cache"
@@ -24,6 +27,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/vedhavyas/go-subkey"
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -111,6 +115,7 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 	}
 
 	// init level databases
+	log.Println("init level databases ...")
 	if err := client.RegisterLeveldbCli(
 		filepath.Join(conf.WorkSpace, config.LEVELDB_DIR),
 		config.TASKDB_NAME, config.CIDMAPDB_NAME,
@@ -121,17 +126,20 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 	h.partRecord = client.GetLeveldbCli(config.TASKDB_NAME)
 
 	// register nodes
+	log.Println("register nodes ...")
 	contractCli, err := h.registerNode(conf)
 	if err != nil {
 		return errors.Wrap(err, "init handles runtime error")
 	}
 
 	//init cd2n base module
+	log.Println("init cd2n base module(ipfs client) ...")
 	ipfsCli, err := client.NewIpfsClient(conf.IpfsAddress)
 	if err != nil {
 		return errors.Wrap(err, "init handles runtime error")
 	}
 
+	log.Println("init cd2n base module(redis client) ...")
 	redisCli := client.NewRedisClient(conf.RedisLoacl, "retriever", conf.RedisPwd)
 
 	h.buffer, err = buffer.NewFileBuffer(
@@ -154,6 +162,7 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 	})
 
 	// init nodes
+	log.Println("init retriever node ...")
 	h.node = node.NewManager(
 		redisCli, ipfsCli,
 		client.GetLeveldbCli(config.CIDMAPDB_NAME),
@@ -184,7 +193,7 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "init handles runtime error")
 	}
-
+	log.Println("init gateway model ...")
 	if h.gateway, err = gateway.NewGateway(
 		redisCli, contractCli, fileCacher,
 		client.GetLeveldbCli(config.TASKDB_NAME),
@@ -193,6 +202,7 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 	}
 
 	//register oss node on chain
+	log.Println("check or register oss node on chain ...")
 	if err = h.registerOssNode(conf); err != nil {
 		return errors.Wrap(err, "init handles runtime error")
 	}
@@ -237,24 +247,25 @@ func ConvertPubkey(addr string) []byte {
 }
 
 func (h *ServerHandle) RechargeGasFeeForTEE(addr string, conf config.Config) error {
-	// hashed := ConvertPubkey(addr)
-	// cessAcc := subkey.SS58Encode(hashed[:], uint16(conf.ChainId))
-	// cli, err := chain.NewLightCessClient(conf.Mnemonic, conf.Rpcs)
-	// if err != nil {
-	// 	return errors.Wrap(err, "check and transfer gas free error")
-	// }
-	// account, err := utils.ParsingPublickey(cessAcc)
-
-	// info, err := cli.QueryAccountInfoByAccountID(account, -1)
-	// if err != nil {
-	// 	return errors.Wrap(err, "check and transfer gas free error")
-	// }
-	// flag, _ := big.NewInt(0).SetString("1000000000000000000000", 10)
-	// if info.Data.Free.Cmp(flag) >= 0 {
-	// 	return nil
-	// }
-	// _, err = cli.TransferToken(cessAcc, "1000000000000000000000")
-	// return errors.Wrap(err, "check and transfer gas free error")
+	hashed := ConvertPubkey(addr)
+	cessAcc := subkey.SS58Encode(hashed[:], uint16(conf.ChainId))
+	cli, err := chain.NewLightCessClient(conf.Mnemonic, conf.Rpcs)
+	if err != nil {
+		return errors.Wrap(err, "check and transfer gas free error")
+	}
+	account, err := utils.ParsingPublickey(cessAcc)
+	info, err := cli.QueryAccountInfo(account, 0)
+	if err != nil {
+		return errors.Wrap(err, "check and transfer gas free error")
+	}
+	flag, _ := big.NewInt(0).SetString("1000000000000000000000", 10)
+	if info.Data.Free.Cmp(flag) >= 0 {
+		return nil
+	}
+	_, err = cli.TransferToken(cessAcc, "1000000000000000000000", nil, nil)
+	if err != nil {
+		return errors.Wrap(err, "check and transfer gas free error")
+	}
 	return nil
 }
 
@@ -263,9 +274,14 @@ func (h *ServerHandle) registerOssNode(conf config.Config) error {
 	if err != nil {
 		return errors.Wrap(err, "register OSS node on chain error")
 	}
-	if _, err = cli.QueryOss(cli.GetKeyInOrder().PublicKey, 0); err == nil {
+	key := cli.GetKeyInOrder()
+	oss, err := cli.QueryOss(key.PublicKey, 0)
+	cli.PutKey(key.Address)
+	if err == nil {
+		log.Println("already reigster oss :", oss)
 		return nil
 	}
+	log.Println("query oss info error:", err)
 	hash, err := cli.RegisterOss(conf.Endpoint, nil, nil)
 	if err != nil {
 		return errors.Wrap(err, "register OSS node on chain error")

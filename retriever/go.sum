@@ -21,8 +21,8 @@ github.com/AndreasBriese/bbloom v0.0.0-20190825152654-46b345b51c96 h1:cTp8I5+VIo
 github.com/AndreasBriese/bbloom v0.0.0-20190825152654-46b345b51c96/go.mod h1:bOvUY6CB00SOBii9/FifXqc0awNKxLFCL/+pkDPuyl8=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
-github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250327055115-261f977f9fee h1:ccPLnPIoGGGnjo0XsbchuaAxxnnzmP2X9sE4Kby5KRk=
-github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250327055115-261f977f9fee/go.mod h1:ObR/6Wixm1L0Kunsfm6eO6oEshD17jWMvoGQGFs45NI=
+github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250409060206-0cfa7fc0af32 h1:0m86Mx7rbiA+hGbuYQYlVTGG8WD4KAqrVYFjDr+/xg0=
+github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250409060206-0cfa7fc0af32/go.mod h1:ObR/6Wixm1L0Kunsfm6eO6oEshD17jWMvoGQGFs45NI=
 github.com/CESSProject/cess-go-sdk v0.7.0 h1:7h7oQiiujRITPz9wlWnc2aVQ2MwHqyrnlndxSe5aM1s=
 github.com/CESSProject/cess-go-sdk v0.7.0/go.mod h1:1YUZTDA0kpuYBkaisXozEw0ueN4yLA+v1xGXxm/yNEo=
 github.com/ChainSafe/go-schnorrkel v1.1.0 h1:rZ6EU+CZFCjB4sHUE1jIu8VDoB/wRKZxoe1tkcO71Wk=
