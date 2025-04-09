@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"log"
-	"math/big"
 	"net/http"
 	"net/url"
 	"os"
@@ -14,10 +13,9 @@ import (
 
 	"github.com/CD2N/CD2N/retriever/config"
 	"github.com/CD2N/CD2N/retriever/gateway"
-	"github.com/CD2N/CD2N/retriever/libs/chain"
 	"github.com/CD2N/CD2N/retriever/libs/client"
 	"github.com/CD2N/CD2N/retriever/node"
-	"github.com/CD2N/CD2N/retriever/utils"
+	"github.com/CD2N/CD2N/sdk/sdkgo/chain/evm"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/cache"
 	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
@@ -26,7 +24,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/vedhavyas/go-subkey"
 	"golang.org/x/crypto/blake2b"
 )
 
@@ -240,24 +237,25 @@ func ConvertPubkey(addr string) []byte {
 }
 
 func (h *ServerHandle) RechargeGasFeeForTEE(addr string, conf config.Config) error {
-	hashed := ConvertPubkey(addr)
-	cessAcc := subkey.SS58Encode(hashed[:], uint16(conf.ChainId))
-	cli, err := chain.NewCessChainClient(context.Background(), conf.Mnemonic, conf.Rpcs)
-	if err != nil {
-		return errors.Wrap(err, "check and transfer gas free error")
-	}
-	account, err := utils.ParsingPublickey(cessAcc)
+	// hashed := ConvertPubkey(addr)
+	// cessAcc := subkey.SS58Encode(hashed[:], uint16(conf.ChainId))
+	// cli, err := chain.NewLightCessClient(conf.Mnemonic, conf.Rpcs)
+	// if err != nil {
+	// 	return errors.Wrap(err, "check and transfer gas free error")
+	// }
+	// account, err := utils.ParsingPublickey(cessAcc)
 
-	info, err := cli.QueryAccountInfoByAccountID(account, -1)
-	if err != nil {
-		return errors.Wrap(err, "check and transfer gas free error")
-	}
-	flag, _ := big.NewInt(0).SetString("1000000000000000000000", 10)
-	if info.Data.Free.Cmp(flag) >= 0 {
-		return nil
-	}
-	_, err = cli.TransferToken(cessAcc, "1000000000000000000000")
-	return errors.Wrap(err, "check and transfer gas free error")
+	// info, err := cli.QueryAccountInfoByAccountID(account, -1)
+	// if err != nil {
+	// 	return errors.Wrap(err, "check and transfer gas free error")
+	// }
+	// flag, _ := big.NewInt(0).SetString("1000000000000000000000", 10)
+	// if info.Data.Free.Cmp(flag) >= 0 {
+	// 	return nil
+	// }
+	// _, err = cli.TransferToken(cessAcc, "1000000000000000000000")
+	// return errors.Wrap(err, "check and transfer gas free error")
+	return nil
 }
 
 func (h *ServerHandle) registerOssNode(conf config.Config) error {
@@ -265,10 +263,10 @@ func (h *ServerHandle) registerOssNode(conf config.Config) error {
 	if err != nil {
 		return errors.Wrap(err, "register OSS node on chain error")
 	}
-	if _, err = cli.QueryOss(cli.GetKeyInOrder().PublicKey, -1); err == nil {
+	if _, err = cli.QueryOss(cli.GetKeyInOrder().PublicKey, 0); err == nil {
 		return nil
 	}
-	hash, err := cli.RegisterOss(conf.Endpoint)
+	hash, err := cli.RegisterOss(conf.Endpoint, nil, nil)
 	if err != nil {
 		return errors.Wrap(err, "register OSS node on chain error")
 	}
@@ -276,18 +274,18 @@ func (h *ServerHandle) registerOssNode(conf config.Config) error {
 	return nil
 }
 
-func (h *ServerHandle) registerNode(conf config.Config) (*chain.CacheProtoContract, error) {
-	cli, err := chain.NewClient(
-		chain.AccountPrivateKey(conf.SecretKey),
-		chain.ChainID(conf.ChainId),
-		chain.ConnectionRpcAddresss(conf.Rpcs),
-		chain.EthereumGas(conf.GasFreeCap, conf.GasLimit),
+func (h *ServerHandle) registerNode(conf config.Config) (*evm.CacheProtoContract, error) {
+	cli, err := evm.NewClient(
+		evm.AccountPrivateKey(conf.SecretKey),
+		evm.ChainID(conf.ChainId),
+		evm.ConnectionRpcAddresss(conf.Rpcs),
+		evm.EthereumGas(conf.GasFreeCap, conf.GasLimit),
 	)
 	if err != nil {
 		return nil, errors.Wrap(err, "register node error")
 	}
 
-	contract, err := chain.NewProtoContract(
+	contract, err := evm.NewProtoContract(
 		cli.GetEthClient(),
 		conf.ProtoContract,
 		conf.SecretKey,
@@ -308,7 +306,7 @@ func (h *ServerHandle) registerNode(conf config.Config) (*chain.CacheProtoContra
 	if err != nil {
 		return nil, errors.Wrap(err, "register node error")
 	}
-	if err = contract.RegisterNode(context.Background(), chain.RegisterReq{
+	if err = contract.RegisterNode(context.Background(), evm.RegisterReq{
 		NodeAcc:   cli.Account,
 		TokenAcc:  common.HexToAddress(conf.TokenAcc),
 		Endpoint:  conf.Endpoint,

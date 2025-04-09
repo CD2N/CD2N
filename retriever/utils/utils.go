@@ -119,6 +119,13 @@ func FillRandData(data []byte) error {
 	return nil
 }
 
+func FillZeroData(data []byte) error {
+	for i := 0; i < len(data); i++ {
+		data[i] = 0
+	}
+	return nil
+}
+
 func VerifySecp256k1Sign(pubkey, data, sign []byte) bool {
 
 	hash := crypto.Keccak256Hash(data)
