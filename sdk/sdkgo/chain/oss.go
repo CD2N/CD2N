@@ -49,7 +49,7 @@ func (c *Client) Authorize(account []byte, caller *signature.KeyringPair, event 
 		return "", errors.Wrap(err, "authorize oss error")
 	}
 
-	blockhash, err := c.SubmitExtrinsic(key, newcall, "Oss.authorize", event, c.Timeout)
+	blockhash, err := c.SubmitExtrinsic(key, newcall, " Oss.Authorize", event, c.Timeout)
 	if err != nil {
 		return blockhash, errors.Wrap(err, "authorize oss error")
 	}
@@ -70,7 +70,7 @@ func (c *Client) CancelOssAuth(account []byte, caller *signature.KeyringPair, ev
 		return "", errors.Wrap(err, "cancel oss authorization error")
 	}
 
-	blockhash, err := c.SubmitExtrinsic(key, newcall, "Oss.cancel_authorize", event, c.Timeout)
+	blockhash, err := c.SubmitExtrinsic(key, newcall, "Oss.CancelAuthorize", event, c.Timeout)
 	if err != nil {
 		return blockhash, errors.Wrap(err, "cancel oss authorization error")
 	}
@@ -94,7 +94,7 @@ func (c *Client) RegisterOss(domain string, caller *signature.KeyringPair, event
 		return "", errors.Wrap(err, "register oss error")
 	}
 
-	blockhash, err := c.SubmitExtrinsic(key, newcall, "Oss.register", event, c.Timeout)
+	blockhash, err := c.SubmitExtrinsic(key, newcall, "Oss.OssRegister", event, c.Timeout)
 	if err != nil {
 		return blockhash, errors.Wrap(err, "register oss error")
 	}
@@ -118,7 +118,7 @@ func (c *Client) UpdateOss(domain string, caller *signature.KeyringPair, event a
 		return "", errors.Wrap(err, "update oss error")
 	}
 
-	blockhash, err := c.SubmitExtrinsic(key, newcall, "Oss.update", event, c.Timeout)
+	blockhash, err := c.SubmitExtrinsic(key, newcall, "Oss.OssUpdate", event, c.Timeout)
 	if err != nil {
 		return blockhash, errors.Wrap(err, "update oss error")
 	}
@@ -139,7 +139,7 @@ func (c *Client) DestroyOss(caller *signature.KeyringPair, event any) (string, e
 		return "", errors.Wrap(err, "destroy oss error")
 	}
 
-	blockhash, err := c.SubmitExtrinsic(key, newcall, "Oss.destroy", event, c.Timeout)
+	blockhash, err := c.SubmitExtrinsic(key, newcall, "Oss.OssDestroy", event, c.Timeout)
 	if err != nil {
 		return blockhash, errors.Wrap(err, "destroy oss error")
 	}

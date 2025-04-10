@@ -4,11 +4,13 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/CD2N/CD2N/sdk/sdkgo/chain"
 	r "github.com/CD2N/CD2N/sdk/sdkgo/retriever"
+	"github.com/centrifuge/go-substrate-rpc-client/v4/registry"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 )
@@ -203,4 +205,34 @@ func TestChainSdk(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Log(dealMap)
+}
+
+func TestChainSdkEvent(t *testing.T) {
+	cli, err := chain.NewClient(
+		chain.OptionWithRpcs([]string{"wss://testnet-rpc.cess.network"}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fc := registry.NewFactory()
+	re, err := fc.CreateEventRegistry(cli.Metadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mp := make(map[string][]string)
+	for _, v := range re {
+		data := strings.Split(v.Name, ".")
+		if len(data) < 2 {
+			continue
+		}
+		s := mp[data[0]]
+		s = append(s, v.Name)
+		mp[data[0]] = s
+	}
+	for k, v := range mp {
+		t.Log(k, ":")
+		for _, d := range v {
+			t.Log("   ", d)
+		}
+	}
 }
