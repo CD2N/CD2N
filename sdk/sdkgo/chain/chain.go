@@ -190,17 +190,14 @@ func (c *Client) SubmitExtrinsic(keypair signature.KeyringPair, call types.Call,
 			if err != nil {
 				return hash, errors.Wrap(err, "submit extrinsic error")
 			}
-			for _, e := range events {
-				if e.Name != eventName {
-					continue
-				}
-				if event == nil {
-					return hash, nil
-				}
+			e, err := ParseTxResult(keypair, events, eventName)
+			if err != nil {
+				return hash, errors.Wrap(err, "submit extrinsic error")
+			}
+			if e != nil && event != nil {
 				if err = DecodeEvent(e, event); err != nil {
 					return hash, errors.Wrap(err, "submit extrinsic error")
 				}
-				break
 			}
 			return hash, nil
 		case err = <-sub.Err():

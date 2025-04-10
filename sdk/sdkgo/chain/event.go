@@ -1,15 +1,57 @@
 package chain
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
 
 	"github.com/centrifuge/go-substrate-rpc-client/v4/registry"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/registry/parser"
+	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/pkg/errors"
 )
+
+func ParseTxResult(caller signature.KeyringPair, events []*parser.Event, eventName string) (*parser.Event, error) {
+	var (
+		event *parser.Event
+	)
+	acc, err := types.NewAccountID(caller.PublicKey)
+	if err != nil {
+		return event, errors.Wrap(err, "parse tx events error")
+	}
+	for _, e := range events {
+		switch e.Name {
+		case eventName:
+			event = e
+		case "TransactionPayment.TransactionFeePaid", "EvmAccountMapping.TransactionFeePaid":
+			if event == nil {
+				continue
+			}
+			feePaid := types.EventTransactionPaymentTransactionFeePaid{}
+			if err := DecodeEvent(e, &feePaid); err != nil {
+				return event, errors.Wrap(err, "parse tx events error")
+			}
+			if !feePaid.Who.Equal(acc) {
+				event = nil
+				continue
+			}
+
+		case "System.ExtrinsicSuccess":
+			if event != nil {
+				return event, nil
+			}
+		case "System.ExtrinsicFailed":
+			if event != nil {
+				jb, _ := json.Marshal(e.Fields)
+				err = errors.New(fmt.Sprintf("extrinsic failed, event: %s", string(jb)))
+				return event, errors.Wrap(err, "parse tx events error")
+			}
+		}
+	}
+	return event, errors.Wrap(errors.New("no tx events found"), "parse tx events error")
+}
 
 func DecodeEvent(event *parser.Event, value any) (err error) {
 	defer func() {
