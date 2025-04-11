@@ -2,7 +2,6 @@ package buffer
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,12 +26,8 @@ func NewFileBuffer(limitSize uint64, dir string) (*FileBuffer, error) {
 			os.Remove(i.Value)
 		}
 	})
-	go func() {
-		err := c.LoadCacheRecordsWithFiles(dir)
-		if err != nil {
-			log.Println(errors.Wrap(err, "new file buffer error"))
-		}
-	}()
+	c.LoadCacheRecordsWithFiles(dir)
+
 	return &FileBuffer{
 		cacher: c,
 		bufDir: dir,

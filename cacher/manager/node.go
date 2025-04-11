@@ -2,9 +2,7 @@ package manager
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path"
 	"strings"
@@ -18,7 +16,6 @@ import (
 	"github.com/CD2N/CD2N/sdk/sdkgo/chain/evm"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/cache"
 	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
-	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
 	"github.com/go-redis/redis/v8"
 	"github.com/panjf2000/ants/v2"
 	"github.com/pkg/errors"
@@ -65,10 +62,11 @@ type ProvideManager struct {
 	files *leveldb.DB
 	//cacher.FileCache
 	*cache.Cache
-	storagers *sync.Map
-	cdnNodes  *sync.Map
-	staskMap  *sync.Map
-	taskChan  chan<- FileTask
+	//storagers *sync.Map
+	*StoragersManager
+	cdnNodes *sync.Map
+	staskMap *sync.Map
+	taskChan chan<- FileTask
 	//fileMg    *FileManager
 	cli  *evm.CacheProtoContract
 	temp string
@@ -80,14 +78,14 @@ func NewProvideManager(c *cache.Cache, ch chan<- FileTask, cli *evm.CacheProtoCo
 		return nil, errors.Wrap(err, "new provide manager error")
 	}
 	return &ProvideManager{
-		files:     files,
-		Cache:     c,
-		taskChan:  ch,
-		cli:       cli,
-		storagers: &sync.Map{},
-		cdnNodes:  &sync.Map{},
-		staskMap:  &sync.Map{},
-		temp:      tempDir,
+		files:            files,
+		Cache:            c,
+		taskChan:         ch,
+		cli:              cli,
+		StoragersManager: NewStoragersManager(),
+		cdnNodes:         &sync.Map{},
+		staskMap:         &sync.Map{},
+		temp:             tempDir,
 	}, nil
 }
 
@@ -177,13 +175,13 @@ func (m *ProvideManager) StorageTaskCallback(e Event) {
 		}
 		task.TaskType = TYPE_PROVIDE
 		if task.MinerAcc == "" || task.MinerAddr == "" {
-			task.Endpoint, err = m.GetMinerEndpoint(task.Token, uint64(task.Count))
+			task.Endpoint, err = m.GetMinerEndpoint(uint64(task.Count))
 			if err != nil {
 				logger.GetLogger(config.LOG_TASK).Error(e.Error())
 				return
 			}
 			//Redistribute data
-			m.CopyAndStoreStorageTask(task)
+			//m.CopyAndStoreStorageTask(task)
 		}
 		m.taskChan <- task
 		return
@@ -251,7 +249,7 @@ func (m *ProvideManager) StorageTaskChecker(ctx context.Context) error {
 						return true
 					}
 				}
-				task.Endpoint, err = m.GetMinerEndpoint(task.Token+"tag:redistribution", uint64(task.Count))
+				task.Endpoint, err = m.GetMinerEndpoint(uint64(task.Count))
 				if err != nil {
 					logger.GetLogger(config.LOG_NODE).Error("check storage order error", err)
 					return true
@@ -264,37 +262,6 @@ func (m *ProvideManager) StorageTaskChecker(ctx context.Context) error {
 			return errors.New("context done")
 		}
 	}
-}
-
-func (m *ProvideManager) GetMinerEndpoint(token string, count uint64) (Endpoint, error) {
-	var endpoint Endpoint
-	min, target := 8192000000, Storage{}
-	tidHash := sha256.Sum256([]byte(token))
-	m.storagers.Range(func(key, value any) bool {
-		k := key.(string)
-		pubkey, err := utils.ParsingPublickey(k)
-		if err != nil {
-			return true
-		}
-		d := CalcDistance(pubkey, tidHash[:])
-		if d < min {
-			node := value.(Storage)
-			if !node.Available ||
-				(node.TotalSpace-node.UsedSpace) < count*client.FRAGMENT_SIZE {
-				return true
-			}
-			target = node
-			min = d
-			return true
-		}
-		return true
-	})
-	if target.Account == "" || target.Endpoint == "" {
-		return endpoint, errors.New("no legal storage node")
-	}
-	endpoint.MinerAcc = target.Account
-	endpoint.MinerAddr = target.Endpoint
-	return endpoint, nil
 }
 
 func (m *ProvideManager) GetFileInfo(did, fid string, net uint16) (FileInfo, error) {
@@ -323,7 +290,7 @@ func (m *ProvideManager) GetFileInfo(did, fid string, net uint16) (FileInfo, err
 				continue
 			}
 			minerAcc := utils.EncodePubkey(frag.Miner[:], net)
-			if _, ok := m.storagers.Load(minerAcc); ok {
+			if _, ok := m.GetStorager(minerAcc); ok {
 				finfo.Fid = fid
 				finfo.Storager = minerAcc
 				return finfo, nil
@@ -384,12 +351,11 @@ func (m *ProvideManager) ExecuteTasks(ctx context.Context, taskCh <-chan *redis.
 					}
 					continue
 				}
-				value, ok := m.storagers.Load(finfo.Storager)
+				node, ok := m.GetStorager(finfo.Storager)
 				if !ok {
 					logger.GetLogger(config.LOG_TASK).Error("storage node not be found.")
 					continue
 				}
-				node := value.(Storage)
 				m.taskChan <- &FileProvideTask{
 					Task:      taskPld,
 					TaskType:  TYPE_RETRIEVE,
@@ -405,71 +371,6 @@ func (m *ProvideManager) ExecuteTasks(ctx context.Context, taskCh <-chan *redis.
 			}
 		}
 	}
-}
-
-func (m *ProvideManager) LoadStorageNodes(conf config.Config) error {
-	var miners config.MinerConfig
-
-	err := config.LoadGeneralConfig(conf.MinerConfigPath, &miners)
-	logger.GetLogger(config.LOG_NODE).Info("load storage nodes from ", conf.MinerConfigPath)
-	if err != nil {
-		return err
-	}
-	chainCli, err := chain.NewLightCessClient("", conf.Rpcs)
-	if err != nil {
-		return errors.Wrap(err, "load storage nodes error")
-	}
-	defer chainCli.Client.Close()
-	for _, miner := range conf.StorageNodes {
-		acc, err := utils.ParsingPublickey(miner.Account)
-		if err != nil {
-			logger.GetLogger(config.LOG_NODE).Error(err.Error())
-			continue
-		}
-		node := Storage{
-			Account:  miner.Account,
-			Endpoint: miner.Endpoint,
-		}
-		info, err := chainCli.QueryMinerItems(acc, 0)
-		if err != nil {
-			logger.GetLogger(config.LOG_NODE).Error(err.Error())
-			continue
-		}
-		node.TotalSpace = uint64(info.IdleSpace.Int64())
-		node.UsedSpace = uint64(info.ServiceSpace.Int64() + info.LockSpace.Int64())
-		node.Available = CheckNodeAvailable(&node)
-		m.storagers.Store(miner.Account, node)
-	}
-
-	logger.GetLogger(config.LOG_NODE).Infof("load %d miners from miner config file", len(miners.Miners))
-
-	for _, miner := range miners.Miners {
-		endpoint := fmt.Sprintf("http://127.0.0.1:%d", miner.Port)
-		keyring, err := signature.KeyringPairFromSecret(miner.Mnemonic, 0)
-		if err != nil {
-			logger.GetLogger(config.LOG_NODE).Error(err.Error())
-			continue
-		}
-		acc := utils.EncodePubkey(keyring.PublicKey, conf.Network)
-		if _, ok := m.storagers.Load(acc); ok {
-			continue
-		}
-		node := Storage{
-			Account:  acc,
-			Endpoint: endpoint,
-		}
-		info, err := chainCli.QueryMinerItems(keyring.PublicKey, 0)
-		if err != nil {
-			logger.GetLogger(config.LOG_NODE).Error(err.Error())
-			continue
-		}
-		node.TotalSpace = uint64(info.IdleSpace.Int64())
-		node.UsedSpace = uint64(info.ServiceSpace.Int64() + info.LockSpace.Int64())
-		node.Available = CheckNodeAvailable(&node)
-		logger.GetLogger(config.LOG_NODE).Info("load storage ", node.Account, " available? ", node.Available)
-		m.storagers.Store(acc, node)
-	}
-	return nil
 }
 
 func (m *ProvideManager) LoadCdnNodes(conf config.Config) error {
@@ -513,41 +414,6 @@ func (m *ProvideManager) LoadCdnNodes(conf config.Config) error {
 		m.cdnNodes.LoadOrStore(node.Account, node)
 	}
 	return nil
-}
-
-func (m *ProvideManager) UpdateStorageNodeStatus(ctx context.Context, conf config.Config) error {
-	ticker := time.NewTicker(time.Minute * 30)
-	for {
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-ticker.C:
-			chainCli, err := chain.NewLightCessClient("", conf.Rpcs)
-			if err != nil {
-				logger.GetLogger(config.LOG_NODE).Error("update storage status error ", err.Error())
-				continue
-			}
-			m.storagers.Range(func(key, value any) bool {
-				node := value.(Storage)
-				acc, err := utils.ParsingPublickey(node.Account)
-				if err != nil {
-					logger.GetLogger(config.LOG_NODE).Error("update storage status error ", err.Error())
-					return true
-				}
-				info, err := chainCli.QueryMinerItems(acc, 0)
-				if err != nil {
-					logger.GetLogger(config.LOG_NODE).Error("update storage status error ", err.Error())
-					return true
-				}
-				node.TotalSpace = uint64(info.IdleSpace.Int64())
-				node.UsedSpace = uint64(info.ServiceSpace.Int64() + info.LockSpace.Int64())
-				node.Available = CheckNodeAvailable(&node)
-				m.storagers.Store(key, node)
-				return true
-			})
-			chainCli.Client.Close()
-		}
-	}
 }
 
 func (m *ProvideManager) SubscribeMessageFromCdnNodes(ctx context.Context, taskCh chan<- *redis.Message, channels ...string) error {

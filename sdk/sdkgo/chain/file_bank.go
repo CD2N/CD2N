@@ -84,7 +84,7 @@ func (c *Client) UploadDeclaration(fid FileHash, segment []SegmentList, user Use
 		return "", errors.Wrap(err, "upload file declaration error")
 	}
 
-	blockhash, err := c.SubmitExtrinsic(key, newcall, "FileBank.upload_declaration", event, c.Timeout)
+	blockhash, err := c.SubmitExtrinsic(key, newcall, "FileBank.UploadDeclaration", event, c.Timeout)
 	if err != nil {
 		return blockhash, errors.Wrap(err, "upload file declaration error")
 	}
@@ -105,7 +105,7 @@ func (c *Client) DeleteUserFile(fid FileHash, owner types.AccountID, caller *sig
 		return "", errors.Wrap(err, "delete user file error")
 	}
 
-	blockhash, err := c.SubmitExtrinsic(key, newcall, "FileBank.delete_file", event, c.Timeout)
+	blockhash, err := c.SubmitExtrinsic(key, newcall, "FileBank.DeleteFile", event, c.Timeout)
 	if err != nil {
 		return blockhash, errors.Wrap(err, "delete user file error")
 	}
