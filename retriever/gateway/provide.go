@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -214,12 +215,16 @@ func (g *Gateway) checker(ctx context.Context, buffer *buffer.FileBuffer) error 
 			if err := client.GetData(g.taskRecord, fid, &ftask); err != nil {
 				return err
 			}
-			logger.GetLogger(config.LOG_PROVIDER).Info("check file: ", fid, "  ", ftask.SubTasks)
-			if ftask.WorkDone {
+			//logger.GetLogger(config.LOG_PROVIDER).Info("check file: ", fid, "  ", ftask.SubTasks)
+			gcFlag := TaskNeedToBeGC(ftask)
+			if ftask.WorkDone || gcFlag {
 				g.pstats.TaskDone(fid)
 				g.keyLock.RemoveLock(fid)
 				client.DeleteData(g.taskRecord, fid)
 				logger.GetLogger(config.LOG_PROVIDER).Infof("file %s distribute workflow done. \n", fid)
+				if gcFlag {
+					TaskGc(buffer, ftask)
+				}
 				return nil
 			}
 			done := 0
@@ -284,13 +289,40 @@ func (g *Gateway) checker(ctx context.Context, buffer *buffer.FileBuffer) error 
 }
 
 func RemoveSubTaskFiles(buffer *buffer.FileBuffer, groupId int, ftask task.ProvideTask) error {
-	for i := 0; i < len(ftask.Fragments); i++ {
+	for i := range ftask.Fragments {
 		err := buffer.RemoveData(filepath.Join(ftask.BaseDir, ftask.Fragments[i][groupId]))
 		if err != nil {
 			return err
 		}
 	}
+	if entries, err := os.ReadDir(ftask.BaseDir); err != nil || len(entries) == 0 {
+		os.RemoveAll(ftask.BaseDir)
+	}
 	return nil
+}
+
+func TaskNeedToBeGC(ftask task.ProvideTask) bool {
+	for i := range ftask.Fragments {
+		for j := range ftask.Fragments[i] {
+			fpath := filepath.Join(ftask.BaseDir, ftask.Fragments[i][j])
+			if _, err := os.Stat(fpath); err != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func TaskGc(buffer *buffer.FileBuffer, ftask task.ProvideTask) {
+	for i := range ftask.Fragments {
+		for j := range ftask.Fragments[i] {
+			fpath := filepath.Join(ftask.BaseDir, ftask.Fragments[i][j])
+			buffer.RemoveData(fpath)
+		}
+	}
+	if entries, err := os.ReadDir(ftask.BaseDir); err != nil || len(entries) == 0 {
+		os.RemoveAll(ftask.BaseDir)
+	}
 }
 
 // func (g *Gateway) CreateStorageOrder(info task.FileInfo) (string, error) {

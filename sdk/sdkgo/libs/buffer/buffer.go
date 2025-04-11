@@ -28,6 +28,12 @@ func NewFileBuffer(limitSize uint64, dir string) (*FileBuffer, error) {
 		}
 	})
 	go func() {
+		defer func() {
+			err := recover()
+			if err != nil {
+				log.Println(err)
+			}
+		}()
 		err := c.LoadCacheRecordsWithFiles(dir)
 		if err != nil {
 			log.Println(errors.Wrap(err, "new file buffer error"))

@@ -292,9 +292,11 @@ func (t *FileStorageTask) FetchFile(fmg *FileManager) {
 	}
 	// get data from cache
 	if item := fmg.Get(t.Did); item.Value != "" {
-		t.Path = item.Value
-		t.Callback(client.NewResponse(200, "success", t))
-		return
+		if fs, err := os.Stat(item.Value); err == nil && !fs.IsDir() && fs.Size() > 0 {
+			t.Path = item.Value
+			t.Callback(client.NewResponse(200, "success", t))
+			return
+		}
 	} else if t.Token == "" {
 		t.Callback(client.NewResponse(400, "retrieving local data but not hitting cache", t))
 	}
