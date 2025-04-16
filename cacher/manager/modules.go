@@ -61,6 +61,7 @@ func (sm *StoragersManager) GetMinerEndpoint(dCount uint64) (Endpoint, error) {
 	}
 	ep.MinerAcc = target.Account
 	ep.MinerAddr = target.Endpoint
+	logger.GetLogger(config.LOG_TASK).Infof("select miner %d,total miners %d", sm.index, len(sm.storagers))
 	sm.index = (sm.index + 1) % len(sm.storagers)
 	return ep, nil
 }
