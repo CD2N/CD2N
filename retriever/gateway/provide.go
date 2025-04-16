@@ -215,16 +215,12 @@ func (g *Gateway) checker(ctx context.Context, buffer *buffer.FileBuffer) error 
 			if err := client.GetData(g.taskRecord, fid, &ftask); err != nil {
 				return err
 			}
-			//logger.GetLogger(config.LOG_PROVIDER).Info("check file: ", fid, "  ", ftask.SubTasks)
-			gcFlag := TaskNeedToBeGC(ftask)
-			if ftask.WorkDone || gcFlag {
+
+			if ftask.WorkDone {
 				g.pstats.TaskDone(fid)
 				g.keyLock.RemoveLock(fid)
 				client.DeleteData(g.taskRecord, fid)
 				logger.GetLogger(config.LOG_PROVIDER).Infof("file %s distribute workflow done. \n", fid)
-				if gcFlag {
-					TaskGc(buffer, ftask)
-				}
 				return nil
 			}
 			done := 0
@@ -253,8 +249,8 @@ func (g *Gateway) checker(ctx context.Context, buffer *buffer.FileBuffer) error 
 						delete(ftask.SubTasks, k)
 					}
 				}
-			} else if strings.Contains(err.Error(), "empty") {
-				logger.GetLogger(config.LOG_PROVIDER).Infof("file %s deal map empty %v", fid, err)
+			} else if strings.Contains(err.Error(), "data not found") {
+				logger.GetLogger(config.LOG_PROVIDER).Infof("file %s data distribution completed.", fid)
 				done = task.PROVIDE_TASK_GROUP_NUM
 			} else {
 				logger.GetLogger(config.LOG_PROVIDER).Error(err)

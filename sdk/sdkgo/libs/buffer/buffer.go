@@ -26,7 +26,7 @@ func NewFileBuffer(limitSize uint64, dir string) (*FileBuffer, error) {
 			os.Remove(i.Value)
 		}
 	})
-	c.LoadCacheRecordsWithFiles(dir)
+	go c.LoadCacheRecordsWithFiles(dir)
 
 	return &FileBuffer{
 		cacher: c,

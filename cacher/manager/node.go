@@ -180,8 +180,7 @@ func (m *ProvideManager) StorageTaskCallback(e Event) {
 				logger.GetLogger(config.LOG_TASK).Error(e.Error())
 				return
 			}
-			//Redistribute data
-			//m.CopyAndStoreStorageTask(task)
+			logger.GetLogger(config.LOG_TASK).Infof("distributing %s fragment[%d] %s to miner %s", task.Fid, task.Count-len(task.Fragments), task.Did, task.MinerAcc)
 		}
 		m.taskChan <- task
 		return
@@ -203,10 +202,12 @@ func (m *ProvideManager) StorageTaskCallback(e Event) {
 				m.Cache.AddWithData(task.Did, task.Path, fs.Size())
 			}
 		}
+		logger.GetLogger(config.LOG_TASK).Infof("distributed file %s fragment[%d] %s to miner %s done.", task.Fid, task.Count-len(task.Fragments), task.Did, task.MinerAcc)
 		task.Did = task.Fragments[0]
 		task.Path = path.Join(m.temp, task.Fid, task.Did)
 		task.Fragments = task.Fragments[1:]
 		task.TaskType = TYPE_RETRIEVE
+
 		m.taskChan <- task
 	}
 }

@@ -2,6 +2,7 @@ package cache
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -189,7 +190,16 @@ func (c *Cache) LoadCacheRecords(fpath string) error {
 }
 
 func (c *Cache) LoadCacheRecordsWithFiles(dir string) error {
-	err := filepath.Walk(dir, func(path string, info fs.FileInfo, err error) error {
+	err := filepath.Walk(dir, func(path string, info fs.FileInfo, err error) (rerr error) {
+		defer func() {
+			if e := recover(); e != nil {
+				rerr = fmt.Errorf("%v", e)
+			}
+
+		}()
+		if err != nil {
+			return nil
+		}
 		if info.IsDir() {
 			return nil
 		}

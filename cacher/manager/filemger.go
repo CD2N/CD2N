@@ -17,6 +17,7 @@ import (
 	"github.com/CD2N/CD2N/cacher/config"
 	"github.com/CD2N/CD2N/cacher/utils"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/cache"
+	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
 	ecies "github.com/ecies/go/v2"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -294,6 +295,7 @@ func (t *FileStorageTask) FetchFile(fmg *FileManager) {
 	if item := fmg.Get(t.Did); item.Value != "" {
 		if fs, err := os.Stat(item.Value); err == nil && !fs.IsDir() && fs.Size() > 0 {
 			t.Path = item.Value
+			logger.GetLogger(config.LOG_TASK).Infof("get data %s form cache", t.Did)
 			t.Callback(client.NewResponse(200, "success", t))
 			return
 		}
