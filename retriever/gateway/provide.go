@@ -298,9 +298,13 @@ func RemoveSubTaskFiles(buffer *buffer.FileBuffer, groupId int, ftask task.Provi
 }
 
 func TaskNeedToBeGC(ftask task.ProvideTask) bool {
-	for i := range ftask.Fragments {
-		for j := range ftask.Fragments[i] {
-			fpath := filepath.Join(ftask.BaseDir, ftask.Fragments[i][j])
+	t, err := time.Parse(config.TIME_LAYOUT, ftask.Timestamp)
+	if err == nil && time.Since(t) > time.Hour*24*3 {
+		return true
+	}
+	for _, v := range ftask.SubTasks {
+		if v.Index < ftask.GroupSize {
+			fpath := filepath.Join(ftask.BaseDir, ftask.Fragments[v.Index][v.GroupId])
 			if _, err := os.Stat(fpath); err != nil {
 				return true
 			}
@@ -320,32 +324,6 @@ func TaskGc(buffer *buffer.FileBuffer, ftask task.ProvideTask) {
 		os.RemoveAll(ftask.BaseDir)
 	}
 }
-
-// func (g *Gateway) CreateStorageOrder(info task.FileInfo) (string, error) {
-// 	var segments []cess.SegmentDataInfo
-// 	for i, v := range info.Fragments {
-// 		segments = append(segments, cess.SegmentDataInfo{
-// 			SegmentHash:  info.Segments[i],
-// 			FragmentHash: v,
-// 		})
-// 	}
-// 	cli, err := g.GetCessClient()
-// 	if err != nil {
-// 		return "", errors.Wrap(err, "create storage order error")
-// 	}
-// 	hash, err := chain.CreateStorageOrder(
-// 		cli, info.Fid, info.FileName,
-// 		info.Territory, segments, info.Owner, uint64(info.FileSize),
-// 	)
-// 	if err != nil {
-// 		if strings.Contains(err.Error(), "unreachable") {
-// 			jb, _ := json.Marshal(info)
-// 			logger.GetLogger(config.LOG_PROVIDER).Error(err, "; data: ", string(jb))
-// 		}
-// 		return "", errors.Wrap(err, "create storage order error")
-// 	}
-// 	return hash, nil
-// }
 
 func (g *Gateway) GetCessClient() (*chain.Client, error) {
 

@@ -80,6 +80,38 @@ func NewGateway(redisCli *redis.Client, contract *evm.CacheProtoContract, cacher
 	return gateway, nil
 }
 
+func (g *Gateway) LoadOssNodes() error {
+	var err error
+	cli, err := g.GetCessClient()
+	if err != nil {
+		return errors.Wrap(err, "load oss nodes error")
+	}
+	osses, err := cli.QueryAllOss(0)
+	if err != nil {
+		return errors.Wrap(err, "load oss nodes error")
+	}
+	for _, oss := range osses {
+
+		node := Cd2nNode{
+			Cd2nNode: client.Cd2nNode{
+				EndPoint: string(oss.Domain),
+			},
+		}
+		data, err := client.CheckCdnNodeAvailable(node.EndPoint)
+		if err != nil {
+			logger.GetLogger(config.LOG_GATEWAY).Error("query cdn node info error ", err.Error())
+			continue
+		}
+		if data.WorkAddr == "" {
+			data.WorkAddr = hex.EncodeToString(oss.Domain)
+		}
+		node.PoolId = data.PoolId
+		node.IsGateway = data.IsGateway
+		g.nodes.Store(data.WorkAddr, node)
+	}
+	return errors.Wrap(err, "load oss nodes error")
+}
+
 func (g *Gateway) LoadCdnNodes() error {
 	var (
 		index int64

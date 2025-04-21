@@ -20,8 +20,6 @@ import (
 	"github.com/CD2N/CD2N/sdk/sdkgo/chain"
 	"github.com/CD2N/CD2N/sdk/sdkgo/chain/evm"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
-	"github.com/CD2N/CD2N/sdk/sdkgo/libs/cache"
-	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
 	"github.com/decred/base58"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gin-gonic/gin"
@@ -132,13 +130,6 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 		return errors.Wrap(err, "init handles runtime error")
 	}
 
-	//init cd2n base module
-	log.Println("init cd2n base module(ipfs client) ...")
-	ipfsCli, err := client.NewIpfsClient(conf.IpfsAddress)
-	if err != nil {
-		return errors.Wrap(err, "init handles runtime error")
-	}
-
 	log.Println("init cd2n base module(redis client) ...")
 	redisCli := client.NewRedisClient(conf.RedisLoacl, "retriever", conf.RedisPwd)
 
@@ -150,35 +141,13 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 		return errors.Wrap(err, "init handles runtime error")
 	}
 
-	ipfsFileCacher := cache.NewCache(uint64(conf.IpfsDiskSize))
-
-	ipfsFileCacher.RegisterSwapoutCallbacksCallbacks(func(i cache.Item) {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
-		defer cancel()
-		err := client.RemoveFileFromIpfs(ipfsCli, ctx, i.Key)
-		if err != nil {
-			logger.GetLogger(config.LOG_RETRIEVE).Error(err)
-		}
-	})
-
 	// init nodes
 	log.Println("init retriever node ...")
 	h.node = node.NewManager(
-		redisCli, ipfsCli,
-		client.GetLeveldbCli(config.CIDMAPDB_NAME),
-		ipfsFileCacher, h.buffer, contractCli.Node.Hex(),
+		redisCli, client.GetLeveldbCli(config.CIDMAPDB_NAME),
+		h.buffer, contractCli.Node.Hex(),
 	)
 
-	// run message pubsub
-	go func() {
-		for i := 0; i < 5; i++ {
-			err = h.node.SubscribeCidMap(ctx, h.poolId)
-			if err != nil {
-				log.Println("subscribe cid map failed", err)
-			}
-			time.Sleep(time.Minute)
-		}
-	}()
 	go h.node.CallbackManager(ctx)
 
 	if !conf.LaunchGateway {
@@ -219,11 +188,21 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 		if err := h.gateway.LoadCdnNodes(); err != nil {
 			log.Println(err)
 		}
+		if err := h.gateway.LoadOssNodes(); err != nil {
+			log.Println(err)
+		}
 		count := 0
 		for range ticker.C {
 			if err = h.gateway.LoadCdnNodes(); err != nil {
 				count++
-				if count%8 == 0 { //print error log per 2 hours
+				if count%48 == 0 { //print error log per 6 hours
+					log.Println(err)
+					count = 0
+				}
+			}
+			if err = h.gateway.LoadOssNodes(); err != nil {
+				count++
+				if count%48 == 0 { //print error log per 6 hours
 					log.Println(err)
 					count = 0
 				}

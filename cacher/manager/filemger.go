@@ -154,6 +154,7 @@ func (t *FileProvideTask) FetchFile(fmg *FileManager) {
 	if item := fmg.Get(t.Did); item.Value != "" {
 		if fs, err := os.Stat(item.Value); err == nil && !fs.IsDir() && fs.Size() > 0 {
 			t.Path = item.Value
+			logger.GetLogger(config.LOG_TASK).Infof("retriever data %s form cache", t.Did)
 			t.Callback(client.NewResponse(200, "success", t))
 			return
 		}
@@ -170,6 +171,7 @@ func (t *FileProvideTask) FetchFile(fmg *FileManager) {
 		t.Callback(client.NewResponse(500, err.Error(), t))
 		return
 	}
+	logger.GetLogger(config.LOG_TASK).Infof("retriever data %s form miner %s", t.Did, t.MinerAcc)
 	t.Callback(client.NewResponse(200, "success", t))
 }
 
@@ -227,6 +229,7 @@ func (t *FileProvideTask) PushFile(fmg *FileManager) {
 		t.Callback(client.NewResponse(500, err.Error(), t))
 		return
 	}
+	logger.GetLogger(config.LOG_TASK).Infof("provide retrieved data %s ", t.Did)
 	t.Callback(client.NewResponse(200, "success", t))
 }
 
@@ -295,7 +298,7 @@ func (t *FileStorageTask) FetchFile(fmg *FileManager) {
 	if item := fmg.Get(t.Did); item.Value != "" {
 		if fs, err := os.Stat(item.Value); err == nil && !fs.IsDir() && fs.Size() > 0 {
 			t.Path = item.Value
-			logger.GetLogger(config.LOG_TASK).Infof("get data %s form cache", t.Did)
+			logger.GetLogger(config.LOG_TASK).Infof("get provide data %s form cache", t.Did)
 			t.Callback(client.NewResponse(200, "success", t))
 			return
 		}
@@ -322,6 +325,7 @@ func (t *FileStorageTask) FetchFile(fmg *FileManager) {
 		t.Callback(client.NewResponse(400, err.Error(), t))
 		return
 	}
+	logger.GetLogger(config.LOG_TASK).Infof("task[%s(token:%s)]: fetch file %s fragment %s for miner %s success", t.Tid, t.Token, t.Fid, t.Did, t.MinerAcc)
 	t.Callback(client.NewResponse(200, "success", t))
 }
 
@@ -334,6 +338,7 @@ func (t *FileStorageTask) PushFile(fmg *FileManager) {
 	if err := client.PushFileToStorageNode(u,
 		fmg.Account, fmg.Message, fmg.Sign,
 		t.Fid, t.Did, t.Path); err != nil {
+		logger.GetLogger(config.LOG_TASK).Errorf("put file %s fragment %s to miner %s error %v", t.Fid, t.Did, t.MinerAcc, err)
 		t.Callback(client.NewResponse(500, err.Error(), t))
 		return
 	}

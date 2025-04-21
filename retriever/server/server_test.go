@@ -28,37 +28,37 @@ func TestChannel(t *testing.T) {
 	t.Log("result: ", ok, " data ", data)
 }
 
-func TestGenCid(t *testing.T) {
-	tfile := "../test_cd2n/buffer/a8a53a4a3f66203ffe3c41d50a70044ac728260ec1a955c8f71fbbbe912f363b/1b0997375a57ed9f6044c906c949669e13da8d5ecee54119bb246f64c1f56c2b"
-	cli, err := client.NewIpfsClient("http://127.0.0.1:5001")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cid, err := client.AddFileToIpfs(cli, context.Background(), tfile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Log(cid)
+// func TestGenCid(t *testing.T) {
+// 	tfile := "../test_cd2n/buffer/a8a53a4a3f66203ffe3c41d50a70044ac728260ec1a955c8f71fbbbe912f363b/1b0997375a57ed9f6044c906c949669e13da8d5ecee54119bb246f64c1f56c2b"
+// 	cli, err := client.NewIpfsClient("http://127.0.0.1:5001")
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	cid, err := client.AddFileToIpfs(cli, context.Background(), tfile)
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	t.Log(cid)
 
-	data, err := client.GetDataInIpfs(cli, context.Background(), cid)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Log(len(data))
-}
+// 	data, err := client.GetDataInIpfs(cli, context.Background(), cid)
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	t.Log(len(data))
+// }
 
-func TestGetDataByCid(t *testing.T) {
-	tfile := "./test.data"
-	cli, err := client.NewIpfsClient("http://127.0.0.1:5001")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cid := "QmcdoURWAqfjN7qEUjDGLCqTSFmbWwoJjWek4CzQMTseGD"
-	err = client.GetFileInIpfs(cli, context.Background(), cid, tfile)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
+// func TestGetDataByCid(t *testing.T) {
+// 	tfile := "./test.data"
+// 	cli, err := client.NewIpfsClient("http://127.0.0.1:5001")
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	cid := "QmcdoURWAqfjN7qEUjDGLCqTSFmbWwoJjWek4CzQMTseGD"
+// 	err = client.GetFileInIpfs(cli, context.Background(), cid, tfile)
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// }
 
 // func TestSaveCid(t *testing.T) {
 // 	cid := "QmXFBa92tEgNPRqiJjZrnw6SUJQGjcWyM5pwjpZX5fPQ85"
@@ -190,90 +190,90 @@ func TestQueryTEEInfo(t *testing.T) {
 // 	t.Log("success, tx hash", hash)
 // }
 
-func TestAudit(t *testing.T) {
-	teeEndpoint := "http://139.180.142.180:1309"
-	u, err := url.JoinPath(teeEndpoint, client.AUDIT_DATA_URL)
-	if err != nil {
-		t.Fatal("join url path error", err)
-	}
-	tfile := "../go.sum"
-	cli, err := client.NewIpfsClient("http://127.0.0.1:5001")
-	if err != nil {
-		t.Fatal("new ipfs client error", err)
-	}
-	st := time.Now()
-	t.Log("start add file to ipfs", st)
-	cid, err := client.AddFileToIpfs(cli, context.Background(), tfile)
-	if err != nil {
-		t.Fatal("add file to ipfs error", err)
-	}
-	t.Log("add file to ipfs", time.Since(st))
+// func TestAudit(t *testing.T) {
+// 	teeEndpoint := "http://139.180.142.180:1309"
+// 	u, err := url.JoinPath(teeEndpoint, client.AUDIT_DATA_URL)
+// 	if err != nil {
+// 		t.Fatal("join url path error", err)
+// 	}
+// 	tfile := "../go.sum"
+// 	cli, err := client.NewIpfsClient("http://127.0.0.1:5001")
+// 	if err != nil {
+// 		t.Fatal("new ipfs client error", err)
+// 	}
+// 	st := time.Now()
+// 	t.Log("start add file to ipfs", st)
+// 	cid, err := client.AddFileToIpfs(cli, context.Background(), tfile)
+// 	if err != nil {
+// 		t.Fatal("add file to ipfs error", err)
+// 	}
+// 	t.Log("add file to ipfs", time.Since(st))
 
-	hexKey := "b22dbc78effaba221dcc12557def7aceca27bc3727f0d1a078b682bce2fe4ff8"
-	sk, err := crypto.HexToECDSA(hexKey)
-	if err != nil {
-		t.Fatal("parse privite key error", err)
-	}
-	userAcc := crypto.PubkeyToAddress(sk.PublicKey)
+// 	hexKey := "b22dbc78effaba221dcc12557def7aceca27bc3727f0d1a078b682bce2fe4ff8"
+// 	sk, err := crypto.HexToECDSA(hexKey)
+// 	if err != nil {
+// 		t.Fatal("parse privite key error", err)
+// 	}
+// 	userAcc := crypto.PubkeyToAddress(sk.PublicKey)
 
-	reqIdBytes, err := utils2.GetRandomBytes()
-	if err != nil {
-		t.Fatal("get random bytes error", err)
-	}
-	reqId := hex.EncodeToString(reqIdBytes)
-	hash := sha256.New()
-	hash.Write([]byte(reqId))
+// 	reqIdBytes, err := utils2.GetRandomBytes()
+// 	if err != nil {
+// 		t.Fatal("get random bytes error", err)
+// 	}
+// 	reqId := hex.EncodeToString(reqIdBytes)
+// 	hash := sha256.New()
+// 	hash.Write([]byte(reqId))
 
-	sign, err := crypto.Sign(hash.Sum(nil), sk)
-	if err != nil {
-		t.Fatal("sign error", err)
-	}
+// 	sign, err := crypto.Sign(hash.Sum(nil), sk)
+// 	if err != nil {
+// 		t.Fatal("sign error", err)
+// 	}
 
-	nonce, err := utils2.GetRandomBytes()
-	if err != nil {
-		t.Fatal("gen nonce error", err)
-	}
+// 	nonce, err := utils2.GetRandomBytes()
+// 	if err != nil {
+// 		t.Fatal("gen nonce error", err)
+// 	}
 
-	pubkey := []byte{3, 156, 81, 231, 38, 235, 173, 109, 193, 216, 141, 22, 0, 240, 53, 231, 238, 31, 161, 196, 184, 105, 188, 199, 146, 255, 107, 215, 175, 36, 119, 106, 187}
+// 	pubkey := []byte{3, 156, 81, 231, 38, 235, 173, 109, 193, 216, 141, 22, 0, 240, 53, 231, 238, 31, 161, 196, 184, 105, 188, 199, 146, 255, 107, 215, 175, 36, 119, 106, 187}
 
-	ecdhsk, err := ecies.GenerateKey()
-	if err != nil {
-		t.Fatal("gen ecdh private key error", err)
-	}
+// 	ecdhsk, err := ecies.GenerateKey()
+// 	if err != nil {
+// 		t.Fatal("gen ecdh private key error", err)
+// 	}
 
-	aeskey, ecdhpk, err := utils2.GetAESKeyEncryptedWithECDH(ecdhsk, pubkey)
-	if err != nil {
-		t.Fatal("gen aes key error", err)
-	}
-	nonce = nonce[:12]
-	fpath, err := utils2.EncryptFile(tfile, aeskey, nonce)
-	if err != nil {
-		t.Fatal("encrypt file with aes error", err)
-	}
+// 	aeskey, ecdhpk, err := utils2.GetAESKeyEncryptedWithECDH(ecdhsk, pubkey)
+// 	if err != nil {
+// 		t.Fatal("gen aes key error", err)
+// 	}
+// 	nonce = nonce[:12]
+// 	fpath, err := utils2.EncryptFile(tfile, aeskey, nonce)
+// 	if err != nil {
+// 		t.Fatal("encrypt file with aes error", err)
+// 	}
 
-	t.Log("cid", cid)
-	t.Log("userAcc", userAcc.Hex()[2:])
-	t.Log("requestId", reqId)
-	t.Log("userSign", hex.EncodeToString(sign))
-	t.Log("supplierAcc", "40907feE3e02465D39Ef05f7d714294D89F6d4f7")
-	t.Log("nonce", hex.EncodeToString(nonce))
-	t.Log("key", hex.EncodeToString(ecdhpk))
-	t.Log("aesKey", hex.EncodeToString(aeskey))
-	t.Log("encrypted file path", fpath)
+// 	t.Log("cid", cid)
+// 	t.Log("userAcc", userAcc.Hex()[2:])
+// 	t.Log("requestId", reqId)
+// 	t.Log("userSign", hex.EncodeToString(sign))
+// 	t.Log("supplierAcc", "40907feE3e02465D39Ef05f7d714294D89F6d4f7")
+// 	t.Log("nonce", hex.EncodeToString(nonce))
+// 	t.Log("key", hex.EncodeToString(ecdhpk))
+// 	t.Log("aesKey", hex.EncodeToString(aeskey))
+// 	t.Log("encrypted file path", fpath)
 
-	err = client.AuditData(u, fpath, "./audited_data", client.TeeReq{
-		Cid:         cid,
-		UserAcc:     userAcc.Hex()[2:],
-		SupplierAcc: "40907feE3e02465D39Ef05f7d714294D89F6d4f7",
-		RequestId:   reqId,
-		UserSign:    sign,
-		Key:         ecdhpk,
-		Nonce:       nonce,
-	})
-	if err != nil {
-		t.Fatal("audit data error", err)
-	}
-}
+// 	err = client.AuditData(u, fpath, "./audited_data", client.TeeReq{
+// 		Cid:         cid,
+// 		UserAcc:     userAcc.Hex()[2:],
+// 		SupplierAcc: "40907feE3e02465D39Ef05f7d714294D89F6d4f7",
+// 		RequestId:   reqId,
+// 		UserSign:    sign,
+// 		Key:         ecdhpk,
+// 		Nonce:       nonce,
+// 	})
+// 	if err != nil {
+// 		t.Fatal("audit data error", err)
+// 	}
+// }
 
 func TestFetchCache(t *testing.T) {
 

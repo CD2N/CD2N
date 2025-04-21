@@ -3,7 +3,7 @@ module github.com/CD2N/CD2N/retriever
 go 1.23.0
 
 require (
-	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250411101706-d26e2a84064f
+	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250416064528-53dbc1d83d9a
 	github.com/CESSProject/cess-go-sdk v0.7.0
 	github.com/decred/base58 v1.0.5
 	github.com/ecies/go/v2 v2.0.10
@@ -13,6 +13,7 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.5.1
 	github.com/ipfs/boxo v0.24.0
 	github.com/ipfs/go-cid v0.4.1
+	github.com/ipfs/go-unixfs v0.4.5
 	github.com/ipfs/kubo v0.31.0
 	github.com/klauspost/reedsolomon v1.12.4
 	github.com/mholt/archiver v3.1.1+incompatible
@@ -27,7 +28,18 @@ require (
 )
 
 require (
+	github.com/ipfs/go-blockservice v0.5.2 // indirect
+	github.com/ipfs/go-ipfs-blockstore v1.3.1 // indirect
+	github.com/ipfs/go-ipfs-chunker v0.0.1 // indirect
+	github.com/ipfs/go-ipfs-ds-help v1.1.1 // indirect
+	github.com/ipfs/go-ipfs-exchange-interface v0.2.1 // indirect
+	github.com/ipfs/go-ipfs-files v0.2.0 // indirect
+	github.com/ipfs/go-ipfs-posinfo v0.0.1 // indirect
+	github.com/ipfs/go-merkledag v0.11.0 // indirect
+	github.com/ipfs/go-verifcid v0.0.3 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
+	github.com/whyrusleeping/chunker v0.0.0-20181014151217-fe64bd25879f // indirect
+	go.uber.org/atomic v1.11.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
 
@@ -88,7 +100,7 @@ require (
 	github.com/ipfs/bbloom v0.0.4 // indirect
 	github.com/ipfs/go-bitfield v1.1.0 // indirect
 	github.com/ipfs/go-block-format v0.2.0 // indirect
-	github.com/ipfs/go-datastore v0.6.0 // indirect
+	github.com/ipfs/go-datastore v0.6.0
 	github.com/ipfs/go-ds-measure v0.2.0 // indirect
 	github.com/ipfs/go-fs-lock v0.0.7 // indirect
 	github.com/ipfs/go-ipfs-cmds v0.13.0 // indirect

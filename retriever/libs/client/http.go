@@ -119,7 +119,6 @@ func SendHttpRequest(method, url string, headers map[string]string, dataReader *
 }
 
 func AuditData(url, fpath, rpath string, req TeeReq) error {
-
 	file, err := os.Open(fpath)
 	if err != nil {
 		return errors.Wrap(err, "audit data error")
@@ -159,10 +158,6 @@ func AuditData(url, fpath, rpath string, req TeeReq) error {
 	}
 	if teeResp.Msg != SUCCESS_MESSAGE {
 		return errors.Wrap(errors.New(fmt.Sprint(teeResp.Data)), "audit data error")
-	}
-
-	if req.Key == nil {
-		return nil
 	}
 
 	var content []byte
