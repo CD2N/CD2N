@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"log"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -31,24 +29,24 @@ func (mg *Manager) GetDataCid(dataId string) (string, error) {
 	return CID, nil
 }
 
-func (mg *Manager) RetrieveLocalData(ctx context.Context, cid string) (string, error) {
-	fpath, err := mg.databuf.NewBufPath(cid)
-	if err != nil {
-		return fpath, errors.Wrap(err, "receive local data error")
-	}
-	err = client.GetFileInIpfs(mg.ipfsCli, ctx, cid, fpath)
-	if err != nil {
-		return fpath, errors.Wrap(err, "receive local data error")
-	}
-	mg.databuf.AddData(cid, fpath)
-	mg.cacher.Get(cid)
-	return fpath, nil
-}
+// func (mg *Manager) RetrieveLocalData(ctx context.Context, cid string) (string, error) {
+// 	fpath, err := mg.databuf.NewBufPath(cid)
+// 	if err != nil {
+// 		return fpath, errors.Wrap(err, "receive local data error")
+// 	}
+// 	err = client.GetFileInIpfs(mg.ipfsCli, ctx, cid, fpath)
+// 	if err != nil {
+// 		return fpath, errors.Wrap(err, "receive local data error")
+// 	}
+// 	mg.databuf.AddData(cid, fpath)
+// 	mg.cacher.Get(cid)
+// 	return fpath, nil
+// }
 
-func (mg *Manager) QueryLocalData(ctx context.Context, cid string) (bool, error) {
-	ok, err := client.QueryFileInIpfs(mg.ipfsCli, ctx, cid)
-	return ok, errors.Wrap(err, "receive local data error")
-}
+// func (mg *Manager) QueryLocalData(ctx context.Context, cid string) (bool, error) {
+// 	ok, err := client.QueryFileInIpfs(mg.ipfsCli, ctx, cid)
+// 	return ok, errors.Wrap(err, "receive local data error")
+// }
 
 func (mg *Manager) GetRetrieveTask(ctx context.Context, tid string) (task.RetrieveTask, error) {
 	var rtask task.RetrieveTask
@@ -63,22 +61,34 @@ func (mg *Manager) GetRetrieveTask(ctx context.Context, tid string) (task.Retrie
 	return rtask, nil
 }
 
-func (mg *Manager) SaveAndPinedData(ctx context.Context, did, fpath string) (string, error) {
-	cid, err := client.AddFileToIpfs(mg.ipfsCli, ctx, fpath)
+// func (mg *Manager) SaveAndPinedData(ctx context.Context, did, fpath string) (string, error) {
+// 	cid, err := client.AddFileToIpfs(mg.ipfsCli, ctx, fpath)
+// 	if err != nil {
+// 		return cid, errors.Wrap(err, "save and pined data to ipfs error")
+// 	}
+// 	err = client.PutData(mg.cidRecord, did, cid)
+// 	if err != nil {
+// 		return cid, errors.Wrap(err, "save and pined data to ipfs error")
+// 	}
+// 	err = client.PinFileInIpfs(mg.ipfsCli, ctx, cid)
+// 	if err != nil {
+// 		return cid, errors.Wrap(err, "save and pined data to ipfs error")
+// 	}
+// 	finfo, err := os.Stat(fpath)
+// 	if err == nil {
+// 		mg.cacher.Add(cid, finfo.Size())
+// 	}
+// 	return cid, nil
+// }
+
+func (mg *Manager) CalcDataCid(did, fpath string) (string, error) {
+	cid, err := client.ComputeCid(fpath, client.CID_V0)
 	if err != nil {
-		return cid, errors.Wrap(err, "save and pined data to ipfs error")
+		return cid, errors.Wrap(err, "calc data cid error")
 	}
 	err = client.PutData(mg.cidRecord, did, cid)
 	if err != nil {
-		return cid, errors.Wrap(err, "save and pined data to ipfs error")
-	}
-	err = client.PinFileInIpfs(mg.ipfsCli, ctx, cid)
-	if err != nil {
-		return cid, errors.Wrap(err, "save and pined data to ipfs error")
-	}
-	finfo, err := os.Stat(fpath)
-	if err == nil {
-		mg.cacher.Add(cid, finfo.Size())
+		return cid, errors.Wrap(err, "calc data cid error")
 	}
 	return cid, nil
 }
@@ -119,9 +129,7 @@ func (mg *Manager) ReceiveData(ctx context.Context, tid, provider, fpath string,
 	if err != nil {
 		return errors.Wrap(err, "receive data error")
 	}
-	// if err = client.DeleteMessage(mg.redisCli, ctx, tid+"-dlock"); err != nil {
-	// 	return errors.Wrap(err, "receive data error")
-	// }
+
 	logger.GetLogger(config.LOG_RETRIEVE).Infof("receive data %s ,task id: %s", task.Did, tid)
 	mg.callbackCh <- tid
 	return nil
@@ -188,7 +196,6 @@ func (mg *Manager) RetrieveDataService(ctx context.Context, teeUrl, user, reqId,
 	if err != nil {
 		return "", errors.Wrap(err, "retrieve data service error")
 	}
-	log.Println("tid:", tid, ",did:", did)
 	task, err := mg.GetRetrieveTask(ctx, tid)
 	if err != nil {
 		return "", errors.Wrap(err, "retrieve data service error")

@@ -53,14 +53,15 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 	defer h.gateway.ReleaseCacheTask(key)
 
 	item := h.gateway.FileCacher.GetData(key)
-	logger.GetLogger(config.LOG_GATEWAY).Infof("get file %s from local disk cache, item: %v", key, item)
 	if item.Value != "" {
 		fname, fpath := buffer.SplitNamePath(item.Value)
 		if fname == "" || fname == buffer.UNNAMED_FILENAME {
 			if fname, err = h.GetFileName(fid); err != nil {
+				logger.GetLogger(config.LOG_GATEWAY).Infof("get file %s name error %v", key, err)
 				fname = key
 			}
 		}
+		logger.GetLogger(config.LOG_GATEWAY).Infof("get file %s from local disk cache, item: %v", key, item)
 		err = ServeFile(c, fname, fpath)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError,
@@ -88,8 +89,7 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 
 	defer func() {
 		for _, dpath := range dataPaths {
-			h.node.SaveAndPinedData(context.Background(), filepath.Base(dpath), dpath)
-			h.buffer.RemoveData(dpath)
+			h.node.CalcDataCid(filepath.Base(dpath), dpath)
 		}
 	}()
 
@@ -107,11 +107,7 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 
 		fragments := ParseDataIds(seg)
 		fragPaths = h.GetDataFromDiskBuffer(fragments...) //retrieve from local buffer
-
-		if len(fragPaths) < config.FRAGMENTS_NUM { //retrieve from IPFS
-			fragPaths = h.gateway.RetrieveDatasInLocal(h.node, time.Second*6, fragments...)
-		}
-
+		logger.GetLogger(config.LOG_GATEWAY).Infof("get fragments from local disk buffer:%v", len(fragPaths))
 		if len(fragPaths) < config.FRAGMENTS_NUM { //retrieve from L2 node, triggered when cache miss, low efficiency
 			record, err := h.gateway.GetDataInfo(sid)
 			if err == nil && record.Fragments != nil {
@@ -119,11 +115,13 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 				if err != nil {
 					continue
 				}
+				logger.GetLogger(config.LOG_GATEWAY).Infof("get fragments from miner pool:%v", len(fragPaths))
 				fragPaths = append(fragPaths, h.gateway.RetrieveDatasInPool(h.node, h.buffer, time.Second*12, u, h.poolId, fid, fragments...)...)
 			} else {
 				ctx, cancel := context.WithTimeout(context.Background(), time.Second*24)
 				nodes := h.gateway.QueryDataFrom(sid)
 				fragPaths = append(fragPaths, h.gateway.RetrieveDataFromRemote(ctx, nodes, h.buffer, fid, fragments...)...)
+				logger.GetLogger(config.LOG_GATEWAY).Infof("get fragments from neighbor retriever:%v", len(fragPaths))
 				cancel()
 			}
 		}

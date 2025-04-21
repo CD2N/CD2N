@@ -31,12 +31,7 @@ func (h *ServerHandle) QueryData(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "query data error", "cid not found"))
 		return
 	}
-	ok, err := h.node.QueryLocalData(context.Background(), cid)
-	if err != nil || !ok {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "query data error", "data not found"))
-		return
-	}
-	c.JSON(http.StatusOK, client.NewResponse(http.StatusOK, "success", ok))
+	c.JSON(http.StatusOK, client.NewResponse(http.StatusOK, "success", cid != ""))
 }
 
 func (h *ServerHandle) FetchCacheData(c *gin.Context) {
@@ -60,31 +55,7 @@ func (h *ServerHandle) FetchCacheData(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(req.Exp))
 	defer cancel()
 
-	fpath, err := h.node.RetrieveLocalData(ctx, cid)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "fetch data error", "cid not found"))
-		return
-	}
-
 	var rpath string
-
-	if fpath != "" { // hit cache in IPFS
-		logger.GetLogger(config.LOG_RETRIEVE).Infof("hit ( %s , %s ) in IPFS node, filepath %s", req.Did, cid, fpath)
-		if err = client.AuditData(u, fpath, rpath, client.TeeReq{
-			Cid:         cid,
-			UserAcc:     utils.Remove0x(req.UserAddr),
-			UserSign:    req.Sign,
-			RequestId:   req.RequestId,
-			SupplierAcc: h.node.GetNodeAddress(),
-		}); err != nil {
-			c.JSON(http.StatusInternalServerError,
-				client.NewResponse(http.StatusInternalServerError, "fetch data error", err.Error()))
-			return
-		}
-		c.File(fpath)
-		h.buffer.RemoveData(fpath)
-		return
-	}
 	tid, err := h.node.RetrieveData(ctx, req.Did, req.UserAddr, req.RequestId, req.ExtData, time.Duration(req.Exp), req.Sign)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "fetch data error", err.Error()))
@@ -100,42 +71,32 @@ func (h *ServerHandle) FetchCacheData(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "fetch data error", err.Error()))
 		return
 	}
-	tidBytes, _ := hex.DecodeString(tid)
-	if err = client.AuditData(u, task.DataPath, rpath, client.TeeReq{
-		Cid:         cid,
-		UserAcc:     utils.Remove0x(req.UserAddr),
-		Key:         task.Pubkey,
-		Nonce:       tidBytes,
-		UserSign:    req.Sign,
-		RequestId:   req.RequestId,
-		SupplierAcc: task.Provider,
-	}); err != nil {
-		c.JSON(http.StatusInternalServerError,
-			client.NewResponse(http.StatusInternalServerError, "fetch data error", err.Error()))
-		return
-	}
+
+	var fpath string
 
 	if task.Pubkey != nil {
-		c.File(rpath)
-		h.buffer.AddData(cid, rpath)
-		defer h.buffer.RemoveData(task.DataPath)
+		tidBytes, _ := hex.DecodeString(tid)
+		if err = client.AuditData(u, task.DataPath, rpath, client.TeeReq{
+			Cid:         cid,
+			UserAcc:     utils.Remove0x(req.UserAddr),
+			Key:         task.Pubkey,
+			Nonce:       tidBytes,
+			UserSign:    req.Sign,
+			RequestId:   req.RequestId,
+			SupplierAcc: task.Provider,
+		}); err != nil {
+			c.JSON(http.StatusInternalServerError,
+				client.NewResponse(http.StatusInternalServerError, "fetch data error", err.Error()))
+			return
+		}
+		fpath = rpath
+		h.buffer.RemoveData(task.DataPath)
 	} else { //The L2 nodes provide unencrypted data
-		c.File(fpath)
-		rpath = fpath
+		fpath = task.DataPath
+		h.buffer.RemoveData(rpath)
 	}
-
-	_, err = h.node.SaveAndPinedData(context.Background(), req.Did, rpath)
-	if err != nil {
-		logger.GetLogger(config.LOG_RETRIEVE).Error(errors.Wrap(err, "fetch data error").Error())
-		return
-	}
-
-	h.buffer.RemoveData(rpath)
-
-	err = h.node.PublishCidMap(context.Background(), h.poolId, req.Did, cid)
-	if err != nil {
-		logger.GetLogger(config.LOG_RETRIEVE).Error(errors.Wrap(err, "fetch data error").Error())
-	}
+	c.File(fpath)
+	h.buffer.AddData(cid, fpath)
 }
 
 func (h *ServerHandle) ProvideData(c *gin.Context) {

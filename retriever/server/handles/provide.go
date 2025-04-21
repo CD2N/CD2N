@@ -44,7 +44,7 @@ func (h *ServerHandle) FetchFile(c *gin.Context) {
 	}
 	cid, err := h.node.GetDataCid(fragment)
 	if err != nil || cid == "" {
-		_, err = h.node.SaveAndPinedData(context.Background(), fragment, fpath)
+		_, err = h.node.CalcDataCid(fragment, fpath)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusInternalServerError, "fetch file error", err.Error()))
 			return

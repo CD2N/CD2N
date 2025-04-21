@@ -37,18 +37,18 @@ func (c *Client) QueryFileMetadata(fid string, block uint32) (FileMetadata, erro
 		hash FileHash
 	)
 	if fid == "" || len(fid) != 64 {
-		return data, errors.Wrap(errors.New("bad fid"), "query deal map error")
+		return data, errors.Wrap(errors.New("bad fid"), "query file metadata error")
 	}
 	for i := range len(fid) {
 		hash[i] = types.U8(fid[i])
 	}
 	h, err := codec.Encode(hash)
 	if err != nil {
-		return data, errors.Wrap(err, "query deal map error")
+		return data, errors.Wrap(err, "query file metadata error")
 	}
-	data, err = QueryStorage[FileMetadata](c, block, "FileBank", "DealMap", h)
+	data, err = QueryStorage[FileMetadata](c, block, "FileBank", "File", h)
 	if err != nil {
-		return data, errors.Wrap(err, "query deal map error")
+		return data, errors.Wrap(err, "query file metadata error")
 	}
 	return data, nil
 }

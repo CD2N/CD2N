@@ -68,22 +68,22 @@ func (g *Gateway) batchRetriever(ctx context.Context, indicators int, handle fun
 	return paths
 }
 
-func (g *Gateway) RetrieveDatasInLocal(cdn node.Cd2nNode, exp time.Duration, dids ...string) []string {
-	ctx, cancel := context.WithTimeout(context.Background(), exp)
-	defer cancel()
-	return g.batchRetriever(ctx, config.FRAGMENTS_NUM,
-		func(ctx context.Context, did string) (string, error) {
+// func (g *Gateway) RetrieveDatasInLocal(cdn node.Cd2nNode, exp time.Duration, dids ...string) []string {
+// 	ctx, cancel := context.WithTimeout(context.Background(), exp)
+// 	defer cancel()
+// 	return g.batchRetriever(ctx, config.FRAGMENTS_NUM,
+// 		func(ctx context.Context, did string) (string, error) {
 
-			cid, err := cdn.GetDataCid(did)
-			if err != nil && cid == "" {
-				return "", errors.Wrap(err, "retrieve data in local error")
-			}
-			rpath, err := cdn.RetrieveLocalData(ctx, cid)
-			return rpath, errors.Wrap(err, "retrieve data in local error")
-		},
-		dids...,
-	)
-}
+// 			cid, err := cdn.GetDataCid(did)
+// 			if err != nil && cid == "" {
+// 				return "", errors.Wrap(err, "retrieve data in local error")
+// 			}
+// 			rpath, err := cdn.RetrieveLocalData(ctx, cid)
+// 			return rpath, errors.Wrap(err, "retrieve data in local error")
+// 		},
+// 		dids...,
+// 	)
+// }
 
 func (g *Gateway) RetrieveDatasInPool(cdn node.Cd2nNode, buf *buffer.FileBuffer, exp time.Duration, teeUrl, poolId, fid string, dids ...string) []string {
 	var (
@@ -117,9 +117,6 @@ func (g *Gateway) RetrieveDatasInPool(cdn node.Cd2nNode, buf *buffer.FileBuffer,
 					return rpath, errors.Wrap(err, "retrieve data in pool error")
 				}
 				rpath, err = cdn.RetrieveDataService(ctx, teeUrl, g.contract.Node.Hex(), reqId, fid, exp, did, sign)
-				// if err == nil && rpath != "" {
-				// 	return rpath, nil
-				// }
 				return rpath, errors.Wrap(err, "retrieve data in pool error")
 			}
 
