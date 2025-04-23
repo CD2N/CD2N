@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -82,6 +84,7 @@ func NewGateway(redisCli *redis.Client, contract *evm.CacheProtoContract, cacher
 
 func (g *Gateway) LoadOssNodes() error {
 	var err error
+	conf := config.GetConfig()
 	cli, err := g.GetCessClient()
 	if err != nil {
 		return errors.Wrap(err, "load oss nodes error")
@@ -97,9 +100,16 @@ func (g *Gateway) LoadOssNodes() error {
 				EndPoint: string(oss.Domain),
 			},
 		}
+
+		if node.EndPoint == "" || conf.Endpoint == node.EndPoint {
+			continue
+		}
+		if !strings.Contains(node.EndPoint, "http://") && strings.Contains(node.EndPoint, "https://") {
+			node.EndPoint = fmt.Sprintf("https://%s", node.EndPoint)
+		}
 		data, err := client.CheckCdnNodeAvailable(node.EndPoint)
 		if err != nil {
-			logger.GetLogger(config.LOG_GATEWAY).Error("query cdn node info error ", err.Error())
+			//logger.GetLogger(config.LOG_GATEWAY).Error("query cdn node info error ", err.Error())
 			continue
 		}
 		if data.WorkAddr == "" {
@@ -108,6 +118,7 @@ func (g *Gateway) LoadOssNodes() error {
 		node.PoolId = data.PoolId
 		node.IsGateway = data.IsGateway
 		g.nodes.Store(data.WorkAddr, node)
+		logger.GetLogger(config.LOG_GATEWAY).Info("find a peer retrieval node ",node)
 	}
 	return errors.Wrap(err, "load oss nodes error")
 }
