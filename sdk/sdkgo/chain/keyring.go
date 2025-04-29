@@ -164,6 +164,7 @@ func (k *Keyrings) GetKeyInOrder() signature.KeyringPair {
 	idx = k.index
 	k.index = (k.index + 1) % len(k.keyrings)
 	k.mu.Unlock()
+	k.lock.Lock(k.keyrings[idx].Address)
 	return k.keyrings[idx]
 }
 
