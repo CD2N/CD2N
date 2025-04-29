@@ -58,7 +58,10 @@ func ReedSolomon(file string, saveDir string) ([]string, error) {
 }
 
 func ReedSolomonWithHandle(file []byte, handle func([]byte) error) error {
-
+	// defer func() {
+	// 	runtime.GC()
+	// 	debug.FreeOSMemory()
+	// }()
 	enc, err := reedsolomon.New(config.FRAGMENTS_NUM, config.PARITY_NUM)
 	if err != nil {
 		return err
@@ -77,6 +80,7 @@ func ReedSolomonWithHandle(file []byte, handle func([]byte) error) error {
 			return err
 		}
 	}
+	shards = nil
 	return nil
 }
 

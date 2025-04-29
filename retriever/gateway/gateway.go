@@ -28,6 +28,14 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
+type Status struct {
+	Ongoing  uint64
+	Done     uint64
+	Expired  uint64
+	FidNum   uint64
+	DlingNum uint64
+}
+
 type DataRecord struct {
 	Fragments []string `json:"fragments"`
 }
@@ -82,6 +90,21 @@ func NewGateway(redisCli *redis.Client, contract *evm.CacheProtoContract, cacher
 	return gateway, nil
 }
 
+func (g *Gateway) GatewayStatus() Status {
+	var num uint64
+	g.pstats.Fids.Range(
+		func(key, value any) bool {
+			num++
+			return true
+		})
+	return Status{
+		Ongoing: uint64(g.pstats.Ongoing.Load()),
+		Done:    uint64(g.pstats.Done.Load()),
+		Expired: uint64(g.pstats.Expired.Load()),
+		FidNum:  num,
+	}
+}
+
 func (g *Gateway) LoadOssNodes() error {
 	var err error
 	conf := config.GetConfig()
@@ -118,7 +141,7 @@ func (g *Gateway) LoadOssNodes() error {
 		node.PoolId = data.PoolId
 		node.IsGateway = data.IsGateway
 		g.nodes.Store(data.WorkAddr, node)
-		logger.GetLogger(config.LOG_GATEWAY).Info("find a peer retrieval node ",node)
+		logger.GetLogger(config.LOG_GATEWAY).Info("find a peer retrieval node ", node)
 	}
 	return errors.Wrap(err, "load oss nodes error")
 }
@@ -284,9 +307,9 @@ func (g *Gateway) ProcessFile(buf *buffer.FileBuffer, name, fpath, territory str
 	}
 
 	hash := sha256.New()
+	fbuf := make([]byte, config.SEGMENT_SIZE)
 	for i := int64(0); i < count; i++ {
 		hash.Reset()
-		fbuf := make([]byte, config.SEGMENT_SIZE)
 		if n, err := f.Read(fbuf); err != nil {
 			return task.FileInfo{}, errors.Wrap(err, "process file error")
 		} else if n < config.SEGMENT_SIZE {

@@ -216,7 +216,11 @@ func (g *Gateway) checker(ctx context.Context, buffer *buffer.FileBuffer) error 
 				return err
 			}
 
-			if ftask.WorkDone {
+			gcflag := TaskNeedToBeGC(ftask)
+			if ftask.WorkDone || gcflag {
+				if gcflag {
+					TaskGc(buffer, ftask)
+				}
 				g.pstats.TaskDone(fid)
 				g.keyLock.RemoveLock(fid)
 				client.DeleteData(g.taskRecord, fid)

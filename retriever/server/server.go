@@ -45,6 +45,7 @@ func SetupGin() {
 
 	router := NewRouter()
 	RegisterHandles(router, handle)
+	RegisterMonitor(router, "retriever-monitor-2025")
 
 	httpServer := &http.Server{
 		Addr:           fmt.Sprintf(":%d", conf.SvcPort),

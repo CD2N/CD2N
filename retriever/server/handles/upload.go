@@ -104,6 +104,8 @@ func (h *ServerHandle) uploadFile(c *gin.Context, file io.Reader, acc []byte, te
 		return
 	}
 
+	logger.GetLogger(config.LOG_GATEWAY).Info("file upload: ", finfo.String())
+
 	cachePath, err := h.gateway.FileCacher.NewBufPath(finfo.Fid)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "upload file error", err.Error()))
