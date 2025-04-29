@@ -87,6 +87,9 @@ func (h *ServerHandle) UploadUserFile(c *gin.Context) {
 }
 
 func (h *ServerHandle) uploadFile(c *gin.Context, file io.Reader, acc []byte, territory, filename string, async, noProxy bool) {
+	if len(filename) > 63 {
+		filename = filename[len(filename)-63:]
+	}
 	tmpName := hex.EncodeToString(utils.CalcSha256Hash(acc, []byte(territory+filename)))
 	fpath, err := h.buffer.NewBufPath(tmpName)
 	if err != nil {
@@ -118,7 +121,7 @@ func (h *ServerHandle) uploadFile(c *gin.Context, file io.Reader, acc []byte, te
 	}
 	h.gateway.FileCacher.AddData(finfo.Fid, buffer.CatNamePath(filename, cachePath))
 	if !async {
-		err = h.gateway.ProvideFile(context.Background(), time.Hour, finfo, false)
+		err = h.gateway.ProvideFile(context.Background(), h.buffer, time.Hour, finfo, false)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "upload file error", err.Error()))
 			return
@@ -358,7 +361,7 @@ func (h *ServerHandle) AsyncUploadFiles(ctx context.Context) error {
 					logger.GetLogger(config.LOG_GATEWAY).Info("provide file async error ", err)
 					return nil
 				}
-				if err := h.gateway.ProvideFile(context.Background(), time.Hour, box.Info, true); err != nil {
+				if err := h.gateway.ProvideFile(context.Background(), h.buffer, time.Hour, box.Info, true); err != nil {
 					logger.GetLogger(config.LOG_GATEWAY).Info("provide file async error ", err)
 					return nil
 				}
@@ -366,7 +369,7 @@ func (h *ServerHandle) AsyncUploadFiles(ctx context.Context) error {
 				return nil
 			}
 
-			if err := h.gateway.ProvideFile(context.Background(), time.Hour, box.Info, false); err != nil {
+			if err := h.gateway.ProvideFile(context.Background(), h.buffer, time.Hour, box.Info, false); err != nil {
 				logger.GetLogger(config.LOG_GATEWAY).Info("provide file async error ", err)
 			}
 			client.DeleteData(h.partRecord, key)

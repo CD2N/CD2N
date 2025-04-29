@@ -3,7 +3,7 @@ module github.com/CD2N/CD2N/retriever
 go 1.23.0
 
 require (
-	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250421034118-0929c8e3e6a5
+	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250429073347-a4dcf554f5a8
 	github.com/CESSProject/cess-go-sdk v0.7.0
 	github.com/decred/base58 v1.0.5
 	github.com/ecies/go/v2 v2.0.10
@@ -36,6 +36,7 @@ require (
 	github.com/ipfs/go-ipfs-posinfo v0.0.1 // indirect
 	github.com/ipfs/go-merkledag v0.11.0 // indirect
 	github.com/ipfs/go-verifcid v0.0.3 // indirect
+	github.com/panjf2000/ants v1.3.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/whyrusleeping/chunker v0.0.0-20181014151217-fe64bd25879f // indirect
 	go.uber.org/atomic v1.11.0 // indirect

@@ -34,7 +34,7 @@ type FileResponse struct {
 	Token     string   `json:"token"`
 }
 
-func (g *Gateway) ProvideFile(ctx context.Context, exp time.Duration, info task.FileInfo, nonProxy bool) error {
+func (g *Gateway) ProvideFile(ctx context.Context, buffer *buffer.FileBuffer, exp time.Duration, info task.FileInfo, nonProxy bool) error {
 	if _, ok := g.pstats.Fids.LoadOrStore(info.Fid, struct{}{}); ok {
 		return errors.Wrap(errors.New("file is being processed"), "provide file error")
 	}
@@ -62,15 +62,28 @@ func (g *Gateway) ProvideFile(ctx context.Context, exp time.Duration, info task.
 	defer func() {
 		if err != nil {
 			g.pstats.Fids.Delete(info.Fid)
+			TaskGc(buffer, provideTask)
 		}
 	}()
 	if !nonProxy {
 		hash, err = g.CreateStorageOrder(info)
 		if err != nil {
+			logger.GetLogger(config.LOG_PROVIDER).Error(errors.Wrap(err, "provide file error "), info.String())
 			return errors.Wrap(err, "provide file error")
 		} else {
 			logger.GetLogger(config.LOG_PROVIDER).Infof("create storage order for file %s, tx hash is %s \n", info.Fid, hash)
 		}
+	}
+
+	cli, err := g.GetCessClient()
+	if err != nil {
+		return errors.Wrap(err, "provide file error")
+	}
+	if meta, err := cli.QueryFileMetadata(info.Fid, 0); err == nil && len(meta.Owner) > 0 {
+		g.pstats.Fids.Delete(info.Fid)
+		TaskGc(buffer, provideTask)
+		logger.GetLogger(config.LOG_PROVIDER).Infof("file %s completed flash transfer", info.Fid)
+		return nil
 	}
 
 	err = client.PutData(g.taskRecord, info.Fid, provideTask)

@@ -1,6 +1,6 @@
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
-github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250421034118-0929c8e3e6a5 h1:bckb2BV3O23p6YkB2lQPp0u2kc8HTAKJivIg/hXCcgk=
-github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250421034118-0929c8e3e6a5/go.mod h1:ObR/6Wixm1L0Kunsfm6eO6oEshD17jWMvoGQGFs45NI=
+github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250429073347-a4dcf554f5a8 h1:RKD426SHCPi9/RKHn/JD0PCLJKCMaeaIfRtUTj2QgBU=
+github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250429073347-a4dcf554f5a8/go.mod h1:jLHhp2nQHh6ujSPH60JdSkjE88sQTk30ub0HxgU+omc=
 github.com/CESSProject/cess-go-sdk v0.7.0 h1:7h7oQiiujRITPz9wlWnc2aVQ2MwHqyrnlndxSe5aM1s=
 github.com/CESSProject/cess-go-sdk v0.7.0/go.mod h1:1YUZTDA0kpuYBkaisXozEw0ueN4yLA+v1xGXxm/yNEo=
 github.com/ChainSafe/go-schnorrkel v1.1.0 h1:rZ6EU+CZFCjB4sHUE1jIu8VDoB/wRKZxoe1tkcO71Wk=
@@ -426,6 +426,8 @@ github.com/onsi/gomega v1.18.1/go.mod h1:0q+aL8jAiMXy9hbwj2mr5GziHiwhAIQpFmmtT5h
 github.com/opentracing/opentracing-go v1.0.2/go.mod h1:UkNAQd3GIcIGf0SeVgPpRdFStlNbqXla1AfSYxPUl2o=
 github.com/opentracing/opentracing-go v1.2.0 h1:uEJPy/1a5RIPAJ0Ov+OIO8OxWu77jEv+1B0VhjKrZUs=
 github.com/opentracing/opentracing-go v1.2.0/go.mod h1:GxEUsuufX4nBwe+T+Wl9TAgYrxe9dPLANfrWvHYVTgc=
+github.com/panjf2000/ants v1.3.0 h1:8pQ+8leaLc9lys2viEEr8md0U4RN6uOSUCE9bOYjQ9M=
+github.com/panjf2000/ants v1.3.0/go.mod h1:AaACblRPzq35m1g3enqYcxspbbiOJJYaxU2wMpm1cXY=
 github.com/panjf2000/ants/v2 v2.10.0 h1:zhRg1pQUtkyRiOFo2Sbqwjp0GfBNo9cUY2/Grpx1p+8=
 github.com/panjf2000/ants/v2 v2.10.0/go.mod h1:7ZxyxsqE4vvW0M7LSD8aI3cKwgFhBHbxnlN8mDqHa1I=
 github.com/pelletier/go-toml/v2 v2.2.3 h1:YmeHyLY8mFWbdkNWwpr+qIL2bEqT0o95WSdkNHvL12M=
