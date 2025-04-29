@@ -81,6 +81,40 @@ type Cd2nNode struct {
 	RedisAddr string `json:"redis_addr"`
 	PoolId    string `json:"poolid"`
 	IsGateway bool   `json:"is_gateway"`
+	Status    `json:"status"`
+}
+
+type DiskStatus struct {
+	UsedCacheSize  uint64  `json:"used_cache_size"`
+	CacheItemNum   uint64  `json:"cache_item_num"`
+	CacheUsage     float32 `json:"cache_usage"`
+	UsedBufferSize uint64  `json:"used_buffer_size"`
+	BufferItemNum  uint64  `json:"buffer_item_num"`
+	BufferUsage    float32 `json:"buffer_usage"`
+}
+
+type DistStatus struct {
+	Ongoing uint64 `json:"ongoing"`
+	Done    uint64 `json:"done"`
+	Expired uint64 `json:"expired"`
+	FidNum  uint64 `json:"fid_num"`
+}
+
+type DownloadStatus struct {
+	DlingNum uint64 `json:"dling_num"`
+}
+
+type RetrieveStatus struct {
+	NTBR         uint64 `json:"ntbr"`
+	RetrieveNum  uint64 `json:"retrieve_num"`
+	RetrievedNum uint64 `json:"retrieved_num"`
+}
+
+type Status struct {
+	DiskStatus     `json:"disk_status"`
+	DistStatus     `json:"dist_status"`
+	RetrieveStatus `json:"retrieve_status"`
+	DownloadStatus `json:"download_status"`
 }
 
 func NewResponse(code int, msg string, data any) Response {

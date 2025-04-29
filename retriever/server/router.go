@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"net/http"
+	"net/http/pprof"
 	"strings"
 
 	"github.com/CD2N/CD2N/retriever/config"
@@ -91,6 +92,21 @@ func Cors() gin.HandlerFunc {
 	}
 }
 
+func RegisterMonitor(router *gin.Engine, apikey string) {
+	debugGroup := router.Group("/debug/pprof")
+	debugGroup.GET("/", gin.WrapH(http.HandlerFunc(pprof.Index)))
+	debugGroup.GET("/heap", gin.WrapH(pprof.Handler("heap")))
+	debugGroup.GET("/goroutine", gin.WrapH(pprof.Handler("goroutine")))
+	debugGroup.GET("/allocs", gin.WrapH(pprof.Handler("allocs")))
+	debugGroup.GET("/block", gin.WrapH(pprof.Handler("block")))
+	debugGroup.GET("/mutex", gin.WrapH(pprof.Handler("mutex")))
+	debugGroup.GET("/threadcreate", gin.WrapH(pprof.Handler("threadcreate")))
+	debugGroup.GET("/profile", gin.WrapH(http.HandlerFunc(pprof.Profile)))
+	debugGroup.POST("/symbol", gin.WrapH(http.HandlerFunc(pprof.Symbol)))
+	debugGroup.GET("/trace", gin.WrapH(http.HandlerFunc(pprof.Trace)))
+	debugGroup.GET("/cmdline", gin.WrapH(http.HandlerFunc(pprof.Cmdline)))
+}
+
 func RegisterHandles(router *gin.Engine, h *handles.ServerHandle) {
 
 	router.GET("/status", h.GetNodeInfo)
@@ -115,5 +131,4 @@ func RegisterHandles(router *gin.Engine, h *handles.ServerHandle) {
 	gateway.POST("/upload/file", h.UploadUserFile)
 	gateway.POST("/part-upload", h.RequestPartsUpload)
 	gateway.POST("/upload/part", h.UploadFileParts)
-
 }

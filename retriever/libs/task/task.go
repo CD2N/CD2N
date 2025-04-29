@@ -159,3 +159,8 @@ func (ps *ProvideStat) TaskFlash(fid string) {
 		ps.Expired.Add(1)
 	}
 }
+
+func (f FileInfo) String() string {
+	jbytes, _ := json.Marshal(f)
+	return string(jbytes)
+}

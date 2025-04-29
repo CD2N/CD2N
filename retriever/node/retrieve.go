@@ -61,26 +61,6 @@ func (mg *Manager) GetRetrieveTask(ctx context.Context, tid string) (task.Retrie
 	return rtask, nil
 }
 
-// func (mg *Manager) SaveAndPinedData(ctx context.Context, did, fpath string) (string, error) {
-// 	cid, err := client.AddFileToIpfs(mg.ipfsCli, ctx, fpath)
-// 	if err != nil {
-// 		return cid, errors.Wrap(err, "save and pined data to ipfs error")
-// 	}
-// 	err = client.PutData(mg.cidRecord, did, cid)
-// 	if err != nil {
-// 		return cid, errors.Wrap(err, "save and pined data to ipfs error")
-// 	}
-// 	err = client.PinFileInIpfs(mg.ipfsCli, ctx, cid)
-// 	if err != nil {
-// 		return cid, errors.Wrap(err, "save and pined data to ipfs error")
-// 	}
-// 	finfo, err := os.Stat(fpath)
-// 	if err == nil {
-// 		mg.cacher.Add(cid, finfo.Size())
-// 	}
-// 	return cid, nil
-// }
-
 func (mg *Manager) CalcDataCid(did, fpath string) (string, error) {
 	cid, err := client.ComputeCid(fpath, client.CID_V0)
 	if err != nil {
@@ -95,6 +75,7 @@ func (mg *Manager) CalcDataCid(did, fpath string) (string, error) {
 
 func (mg *Manager) RetrieveData(ctx context.Context, did, requester, reqId, extdata string, exp time.Duration, sign []byte) (string, error) {
 	//publish retrieve data task
+	mg.retrieveNum.Add(1)
 	ch, err := mg.NewRetrieveDataTask(ctx, did, requester, reqId, extdata, exp, sign)
 	if err != nil {
 		return "", errors.Wrap(err, "retrieve data error")
@@ -105,6 +86,7 @@ func (mg *Manager) RetrieveData(ctx context.Context, did, requester, reqId, extd
 	case <-timer.C:
 		return "", errors.Wrap(errors.New("timeout"), "retrieve data error")
 	case tid := <-ch:
+		mg.retrievedNum.Add(1)
 		return tid, nil
 	}
 }

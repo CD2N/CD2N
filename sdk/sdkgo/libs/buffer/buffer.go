@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
+	"time"
 
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/cache"
 	"github.com/pkg/errors"
@@ -12,11 +14,16 @@ import (
 
 const (
 	UNNAMED_FILENAME = "Unnamed"
+	SERIALIZED_LIMIT = 5
+	UPDATE_TIME      = 5 * time.Minute
+	METADATA         = "buffer_metadata.json"
 )
 
 type FileBuffer struct {
-	cacher *cache.Cache
-	bufDir string
+	cacher       *cache.Cache
+	bufDir       string
+	updateAt     *atomic.Value
+	unserialized *atomic.Uint64
 }
 
 func NewFileBuffer(limitSize uint64, dir string) (*FileBuffer, error) {
@@ -26,11 +33,18 @@ func NewFileBuffer(limitSize uint64, dir string) (*FileBuffer, error) {
 			os.Remove(i.Value)
 		}
 	})
-	go c.LoadCacheRecordsWithFiles(dir)
+	if err := c.LoadCacheRecords(filepath.Join(dir, METADATA)); err != nil {
+		c.LoadCacheRecordsWithFiles(dir) //
+	}
+
+	update := &atomic.Value{}
+	update.Store(time.Now())
 
 	return &FileBuffer{
-		cacher: c,
-		bufDir: dir,
+		cacher:       c,
+		bufDir:       dir,
+		updateAt:     update,
+		unserialized: &atomic.Uint64{},
 	}, nil
 }
 
@@ -78,6 +92,12 @@ func (b *FileBuffer) AddData(key, fpath string) {
 		return
 	}
 	b.cacher.AddWithData(key, fpath, f.Size())
+	b.unserialized.Add(1)
+	if b.unserialized.Load() >= SERIALIZED_LIMIT || time.Since(b.updateAt.Load().(time.Time)) >= UPDATE_TIME {
+		b.updateAt.Store(time.Now())
+		b.cacher.SaveCacheRecords(filepath.Join(b.bufDir, METADATA))
+		b.unserialized.Store(0)
+	}
 }
 
 func (b *FileBuffer) GetData(key string) cache.Item {
@@ -89,8 +109,19 @@ func (b *FileBuffer) RemoveData(fpath string) error {
 		return errors.Wrap(err, "remove file buffer error")
 	}
 	b.cacher.RemoveItem(filepath.Base(fpath))
+	b.unserialized.Add(1)
+	if b.unserialized.Load() >= SERIALIZED_LIMIT || time.Since(b.updateAt.Load().(time.Time)) >= UPDATE_TIME {
+		b.updateAt.Store(time.Now())
+		b.cacher.SaveCacheRecords(filepath.Join(b.bufDir, METADATA))
+		b.unserialized.Store(0)
+	}
 	return nil
 }
+
+func (b *FileBuffer) BufferStatus() cache.Info {
+	return b.cacher.Status()
+}
+
 func CatNamePath(name, path string) string {
 	return fmt.Sprintf("%s-=+>%s", name, path)
 }

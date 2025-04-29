@@ -2,19 +2,28 @@ package cache
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
+	"github.com/panjf2000/ants"
 	"github.com/pkg/errors"
 )
 
 const (
 	DEFAULT_LIMIT_SIZE = 2 * 1014 * 1024 * 1024 * 1024
 )
+
+type Info struct {
+	UsedSize   uint64
+	CacheLimit uint64
+	ItemNum    uint64
+	Usage      float32
+	HitRate    float32
+}
 
 type Item struct {
 	Key       string
@@ -29,6 +38,8 @@ type Cache struct {
 	cacheSize        uint64
 	cacheLimit       uint64
 	itemNum          uint64
+	getNum           uint64
+	hitNum           uint64
 	cache            map[string]*Item
 	head, tail       *Item
 	addCallbacks     []func(Item)
@@ -52,10 +63,21 @@ func NewCache(limitSize uint64) *Cache {
 	}
 }
 
+func (c *Cache) Status() Info {
+	return Info{
+		UsedSize:   c.cacheSize,
+		CacheLimit: c.cacheLimit,
+		ItemNum:    c.itemNum,
+		Usage:      float32(c.cacheSize) / float32(c.cacheLimit+1),
+		HitRate:    float32(c.hitNum) / float32(c.getNum+1),
+	}
+}
+
 func (c *Cache) Get(key string) Item {
 	var item Item
 	c.lock.Lock()
 	defer c.lock.Unlock()
+	c.getNum++
 	if v, ok := c.cache[key]; ok {
 		item.Value = v.Value
 		item.AccessOn = v.AccessOn
@@ -64,6 +86,7 @@ func (c *Cache) Get(key string) Item {
 		item.Key = key
 		v.AccessOn = time.Now()
 		v.Freq++
+		c.hitNum++
 		c.removeItem(v)
 		c.moveToHead(v)
 	}
@@ -155,6 +178,7 @@ func (c *Cache) SaveCacheRecords(fpath string) error {
 	for p := c.head.Next; p != c.tail; p = p.Next {
 		items = append(items, Item{
 			Key:      p.Key,
+			Value:    p.Value,
 			Size:     p.Size,
 			Freq:     p.Freq,
 			AccessOn: p.AccessOn,
@@ -184,27 +208,32 @@ func (c *Cache) LoadCacheRecords(fpath string) error {
 		return errors.Wrap(err, "load cache records")
 	}
 	for i := len(items) - 1; i > 0; i-- {
-		c.Add(items[i].Key, items[i].Size)
+		c.AddWithData(items[i].Key, items[i].Value, items[i].Size)
 	}
 	return nil
 }
 
 func (c *Cache) LoadCacheRecordsWithFiles(dir string) error {
-	err := filepath.Walk(dir, func(path string, info fs.FileInfo, err error) (rerr error) {
-		defer func() {
-			if e := recover(); e != nil {
-				rerr = fmt.Errorf("%v", e)
+	pool, err := ants.NewPool(16)
+	if err != nil {
+		return errors.Wrap(err, "load cache records error")
+	}
+	err = filepath.Walk(dir, func(path string, info fs.FileInfo, err error) error {
+		pool.Submit(func() {
+			if err != nil {
+				log.Println(err)
+				return
 			}
-
-		}()
-		if err != nil {
-			return nil
-		}
-		if info.IsDir() {
-			return nil
-		}
-		c.AddWithData(info.Name(), path, info.Size())
+			if info == nil {
+				return
+			}
+			if info.IsDir() {
+				return
+			}
+			c.AddWithData(info.Name(), path, info.Size())
+		})
 		return nil
 	})
+	pool.Release()
 	return errors.Wrap(err, "load cache records error")
 }
