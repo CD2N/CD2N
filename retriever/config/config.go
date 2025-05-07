@@ -42,16 +42,17 @@ type NodeConfig struct {
 }
 
 type ServerConfig struct {
-	PoolName      string
-	LaunchGateway bool
-	Debug         bool
-	IpfsAddress   string //ifps host:port
-	RedisAddress  string //redis host:port
-	RedisLoacl    string
-	TeeAddress    string
-	Endpoint      string
-	RedisPwd      string
-	SvcPort       int
+	PoolName        string
+	DisableLocalSvc bool // Whether to disable local service
+	LaunchGateway   bool
+	Debug           bool
+	IpfsAddress     string //ifps host:port
+	RedisAddress    string //redis host:port
+	RedisLoacl      string
+	TeeAddress      string
+	Endpoint        string
+	RedisPwd        string
+	SvcPort         int
 }
 
 const (

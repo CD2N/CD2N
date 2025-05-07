@@ -381,6 +381,42 @@ func (g *Gateway) CreateStorageOrder(info task.FileInfo) (string, error) {
 	return hash, nil
 }
 
+func (g *Gateway) CreateFlashStorageOrder(owner []byte, fid, filename, territory string) (string, error) {
+	cli, err := g.GetCessClient()
+	if err != nil {
+		return "", errors.Wrap(err, "create flash storage order error")
+	}
+	meta, err := cli.QueryFileMetadata(fid, 0)
+	if err != nil {
+		return "", errors.Wrap(err, "create flash storage order error")
+	}
+	acc, err := types.NewAccountID(owner)
+	if err != nil {
+		return "", errors.Wrap(err, "create flash storage order error")
+	}
+	user := chain.UserBrief{
+		User:          *acc,
+		FileName:      types.NewBytes([]byte(filename)),
+		TerriortyName: types.NewBytes([]byte(territory)),
+	}
+	var segments []chain.SegmentList
+	for _, v := range meta.SegmentList {
+		segment := chain.SegmentList{
+			SegmentHash:  v.Hash,
+			FragmentHash: make([]chain.FileHash, len(v.FragmentList)),
+		}
+		for i, v := range v.FragmentList {
+			segment.FragmentHash[i] = v.Hash
+		}
+		segments = append(segments, segment)
+	}
+	hash, err := cli.UploadDeclaration(getFileHash(fid), segments, user, meta.FileSize.Uint64(), nil, nil)
+	if err != nil {
+		return hash, errors.Wrap(err, "create flash storage order error")
+	}
+	return hash, nil
+}
+
 func getFileHash(fid string) chain.FileHash {
 	var hash chain.FileHash
 	for i := 0; i < len(fid) && i < len(hash); i++ {

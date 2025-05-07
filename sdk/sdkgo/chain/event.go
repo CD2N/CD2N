@@ -13,6 +13,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+var (
+	ErrTxEventNotFound = errors.New("tx event not found")
+)
+
 func ParseTxResult(caller signature.KeyringPair, events []*parser.Event, eventName string) (*parser.Event, error) {
 	var (
 		event *parser.Event
@@ -50,7 +54,7 @@ func ParseTxResult(caller signature.KeyringPair, events []*parser.Event, eventNa
 			}
 		}
 	}
-	return event, errors.Wrap(errors.New("no tx events found"), "parse tx events error")
+	return event, errors.Wrap(ErrTxEventNotFound, "parse tx events error")
 }
 
 func DecodeEvent(event *parser.Event, value any) (err error) {

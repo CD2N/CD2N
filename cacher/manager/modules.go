@@ -3,16 +3,47 @@ package manager
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/CD2N/CD2N/cacher/config"
 	"github.com/CD2N/CD2N/cacher/utils"
 	"github.com/CD2N/CD2N/sdk/sdkgo/chain"
+	"github.com/CD2N/CD2N/sdk/sdkgo/chain/evm"
 	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
+	"github.com/go-redis/redis/v8"
 	"github.com/pkg/errors"
 )
+
+type Storage struct {
+	Account    string `json:"account"`
+	TotalSpace uint64 `json:"total_space"`
+	UsedSpace  uint64 `json:"used_space"`
+	Endpoint   string `json:"endpoint"`
+	Available  bool   `json:"available"`
+}
+
+func (n *Storage) IsAvailable() bool {
+	return n.Available
+}
+
+type Retriever struct {
+	Account      string `json:"account"`
+	Endpoint     string `json:"endpoint"`
+	RedisAddress string `json:"redis_address"`
+	TeePubkey    []byte `json:"tee_pubkey"`
+	IsGateway    bool   `json:"is_gateway"`
+	redisCli     *redis.Client
+	Available    bool `json:"available"`
+}
+
+func (n *Retriever) IsAvailable() bool {
+	return n.Available
+}
+
+///////////*******************************/////////////
 
 type StoragersManager struct {
 	lock      *sync.RWMutex
@@ -170,133 +201,110 @@ func (sm *StoragersManager) UpdateStorageNodeStatus(ctx context.Context, conf co
 	}
 }
 
-// func (m *ProvideManager) UpdateStorageNodeStatus(ctx context.Context, conf config.Config) error {
-// 	ticker := time.NewTicker(time.Minute * 30)
-// 	for {
-// 		select {
-// 		case <-ctx.Done():
-// 			return nil
-// 		case <-ticker.C:
-// 			chainCli, err := chain.NewLightCessClient("", conf.Rpcs)
-// 			if err != nil {
-// 				logger.GetLogger(config.LOG_NODE).Error("update storage status error ", err.Error())
-// 				continue
-// 			}
-// 			m.storagers.Range(func(key, value any) bool {
-// 				node := value.(Storage)
-// 				acc, err := utils.ParsingPublickey(node.Account)
-// 				if err != nil {
-// 					logger.GetLogger(config.LOG_NODE).Error("update storage status error ", err.Error())
-// 					return true
-// 				}
-// 				info, err := chainCli.QueryMinerItems(acc, 0)
-// 				if err != nil {
-// 					logger.GetLogger(config.LOG_NODE).Error("update storage status error ", err.Error())
-// 					return true
-// 				}
-// 				node.TotalSpace = uint64(info.IdleSpace.Int64())
-// 				node.UsedSpace = uint64(info.ServiceSpace.Int64() + info.LockSpace.Int64())
-// 				node.Available = CheckNodeAvailable(&node)
-// 				m.storagers.Store(key, node)
-// 				return true
-// 			})
-// 			chainCli.Client.Close()
-// 		}
-// 	}
-// }
+type RetrieverManager struct {
+	nodes *sync.Map
+}
 
-// func (m *ProvideManager) LoadStorageNodes(conf config.Config) error {
-// 	var miners config.MinerConfig
+func NewRetrieverManager() *RetrieverManager {
+	return &RetrieverManager{
+		nodes: &sync.Map{},
+	}
+}
 
-// 	err := config.LoadGeneralConfig(conf.MinerConfigPath, &miners)
-// 	logger.GetLogger(config.LOG_NODE).Info("load storage nodes from ", conf.MinerConfigPath)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	chainCli, err := chain.NewLightCessClient("", conf.Rpcs)
-// 	if err != nil {
-// 		return errors.Wrap(err, "load storage nodes error")
-// 	}
-// 	defer chainCli.Client.Close()
-// 	for _, miner := range conf.StorageNodes {
-// 		acc, err := utils.ParsingPublickey(miner.Account)
-// 		if err != nil {
-// 			logger.GetLogger(config.LOG_NODE).Error(err.Error())
-// 			continue
-// 		}
-// 		node := Storage{
-// 			Account:  miner.Account,
-// 			Endpoint: miner.Endpoint,
-// 		}
-// 		info, err := chainCli.QueryMinerItems(acc, 0)
-// 		if err != nil {
-// 			logger.GetLogger(config.LOG_NODE).Error(err.Error())
-// 			continue
-// 		}
-// 		node.TotalSpace = uint64(info.IdleSpace.Int64())
-// 		node.UsedSpace = uint64(info.ServiceSpace.Int64() + info.LockSpace.Int64())
-// 		node.Available = CheckNodeAvailable(&node)
-// 		m.storagers.Store(miner.Account, node)
-// 	}
+func (rm *RetrieverManager) GetRetriever(key string) (Retriever, bool) {
+	v, ok := rm.nodes.Load(key)
+	if !ok {
+		return Retriever{}, ok
+	}
+	node, ok := v.(Retriever)
+	if !ok {
+		return Retriever{}, ok
+	}
+	return node, true
+}
 
-// 	logger.GetLogger(config.LOG_NODE).Infof("load %d miners from miner config file", len(miners.Miners))
+func (rm *RetrieverManager) RangeRetriever(f func(key string, node Retriever) bool) {
+	rm.nodes.Range(func(key, value any) bool {
+		k, ok := key.(string)
+		if !ok {
+			return true
+		}
+		node, ok := value.(Retriever)
+		if !ok {
+			return true
+		}
+		return f(k, node)
+	})
+}
 
-// 	for _, miner := range miners.Miners {
-// 		endpoint := fmt.Sprintf("http://127.0.0.1:%d", miner.Port)
-// 		keyring, err := signature.KeyringPairFromSecret(miner.Mnemonic, 0)
-// 		if err != nil {
-// 			logger.GetLogger(config.LOG_NODE).Error(err.Error())
-// 			continue
-// 		}
-// 		acc := utils.EncodePubkey(keyring.PublicKey, conf.Network)
-// 		if _, ok := m.storagers.Load(acc); ok {
-// 			continue
-// 		}
-// 		node := Storage{
-// 			Account:  acc,
-// 			Endpoint: endpoint,
-// 		}
-// 		info, err := chainCli.QueryMinerItems(keyring.PublicKey, 0)
-// 		if err != nil {
-// 			logger.GetLogger(config.LOG_NODE).Error(err.Error())
-// 			continue
-// 		}
-// 		node.TotalSpace = uint64(info.IdleSpace.Int64())
-// 		node.UsedSpace = uint64(info.ServiceSpace.Int64() + info.LockSpace.Int64())
-// 		node.Available = CheckNodeAvailable(&node)
-// 		logger.GetLogger(config.LOG_NODE).Info("load storage ", node.Account, " available? ", node.Available)
-// 		m.storagers.Store(acc, node)
-// 	}
-// 	return nil
-// }
+func (rm *RetrieverManager) UpdateRetriever(key string, node Retriever) {
+	rm.nodes.Store(key, node)
+}
 
-// func (m *ProvideManager) GetMinerEndpoint(token string, count uint64) (Endpoint, error) {
-// 	var endpoint Endpoint
-// 	min, target := 8192000000, Storage{}
-// 	tidHash := sha256.Sum256([]byte(token))
-// 	m.storagers.Range(func(key, value any) bool {
-// 		k := key.(string)
-// 		pubkey, err := utils.ParsingPublickey(k)
-// 		if err != nil {
-// 			return true
-// 		}
-// 		d := CalcDistance(pubkey, tidHash[:])
-// 		if d < min {
-// 			node := value.(Storage)
-// 			if !node.Available ||
-// 				(node.TotalSpace-node.UsedSpace) < count*client.FRAGMENT_SIZE {
-// 				return true
-// 			}
-// 			target = node
-// 			min = d
-// 			return true
-// 		}
-// 		return true
-// 	})
-// 	if target.Account == "" || target.Endpoint == "" {
-// 		return endpoint, errors.New("no legal storage node")
-// 	}
-// 	endpoint.MinerAcc = target.Account
-// 	endpoint.MinerAddr = target.Endpoint
-// 	return endpoint, nil
-// }
+func (rm *RetrieverManager) LoadRetrievers(cli *evm.CacheProtoContract, conf config.Config) error {
+	for _, cdn := range conf.CdnNodes {
+		if cdn.Account == "" || cdn.Endpoint == "" {
+			continue
+		}
+		node := Retriever{
+			Account:  cdn.Account,
+			Endpoint: cdn.Endpoint,
+		}
+		ava := CheckNodeAvailable(&node)
+		node.Available = ava
+		actl, ok := rm.nodes.LoadOrStore(cdn.Account, node)
+		if ok {
+			node = actl.(Retriever)
+			if !node.Available && ava {
+				node.Available = true
+				rm.nodes.Store(cdn.Account, node)
+			}
+		}
+	}
+	var index int64
+	//load retriever node on contract
+	for {
+		addr, err := cli.QueryCdnL1NodeByIndex(index)
+		if err != nil {
+			logger.GetLogger(config.LOG_NODE).Error("query cdn node info error ", err.Error())
+			break
+		}
+		index++
+		info, err := cli.QueryRegisterInfo(addr)
+		if err != nil {
+			logger.GetLogger(config.LOG_NODE).Error("query cdn node info error ", err.Error())
+			continue
+		}
+		node := Retriever{
+			Account:  addr.Hex(),
+			Endpoint: info.Endpoint,
+		}
+		node.Available = CheckNodeAvailable(&node)
+		rm.nodes.LoadOrStore(node.Account, node)
+	}
+
+	//load retriever node on chain
+	chainCli, err := chain.NewLightCessClient("", config.GetConfig().Rpcs)
+	if err != nil {
+		logger.GetLogger(config.LOG_NODE).Error(errors.Wrap(err, "load retrievers error"))
+		return errors.Wrap(err, "load retrievers error")
+	}
+	osses, err := chainCli.QueryAllOss(0)
+	if err != nil {
+		return errors.Wrap(err, "load oss nodes error")
+	}
+	for _, oss := range osses {
+		node := Retriever{
+			Endpoint: string(oss.Domain),
+		}
+		if node.Endpoint == "" {
+			continue
+		}
+		if !strings.Contains(node.Endpoint, "http://") && strings.Contains(node.Endpoint, "https://") {
+			node.Endpoint = fmt.Sprintf("https://%s", node.Endpoint)
+		}
+		node.Available = CheckNodeAvailable(&node)
+		rm.nodes.LoadOrStore(node.Account, node)
+	}
+	return nil
+}
