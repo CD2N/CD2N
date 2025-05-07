@@ -32,39 +32,13 @@ type FileInfo struct {
 	Storager string `json:"storager"`
 }
 
-type Storage struct {
-	Account    string `json:"account"`
-	TotalSpace uint64 `json:"total_space"`
-	UsedSpace  uint64 `json:"used_space"`
-	Endpoint   string `json:"endpoint"`
-	Available  bool   `json:"available"`
-}
-
-func (n *Storage) IsAvailable() bool {
-	return n.Available
-}
-
-type CdnNode struct {
-	Account      string `json:"account"`
-	Endpoint     string `json:"endpoint"`
-	RedisAddress string `json:"redis_address"`
-	TeePubkey    []byte `json:"tee_pubkey"`
-	IsGateway    bool   `json:"is_gateway"`
-	redisCli     *redis.Client
-	Available    bool `json:"available"`
-}
-
-func (n *CdnNode) IsAvailable() bool {
-	return n.Available
-}
-
 type ProvideManager struct {
 	files *leveldb.DB
 	//cacher.FileCache
 	*cache.Cache
 	//storagers *sync.Map
 	*StoragersManager
-	cdnNodes *sync.Map
+	*RetrieverManager
 	staskMap *sync.Map
 	taskChan chan<- FileTask
 	//fileMg    *FileManager
@@ -83,7 +57,6 @@ func NewProvideManager(c *cache.Cache, ch chan<- FileTask, cli *evm.CacheProtoCo
 		taskChan:         ch,
 		cli:              cli,
 		StoragersManager: NewStoragersManager(),
-		cdnNodes:         &sync.Map{},
 		staskMap:         &sync.Map{},
 		temp:             tempDir,
 	}, nil
@@ -330,13 +303,11 @@ func (m *ProvideManager) ExecuteTasks(ctx context.Context, taskCh <-chan *redis.
 			}
 			if task.Channel == client.CHANNEL_RETRIEVE {
 
-				nv, ok := m.cdnNodes.Load(taskPld.Acc)
+				cdnNode, ok := m.GetRetriever(taskPld.Acc)
 				if !ok {
 					logger.GetLogger(config.LOG_TASK).Error("cdn node not be found.")
 					continue
 				}
-				cdnNode := nv.(CdnNode)
-
 				finfo, err := m.GetFileInfo(taskPld.Did, taskPld.ExtData, net)
 				if err != nil {
 					logger.GetLogger(config.LOG_TASK).Error(err.Error())
@@ -374,56 +345,12 @@ func (m *ProvideManager) ExecuteTasks(ctx context.Context, taskCh <-chan *redis.
 	}
 }
 
-func (m *ProvideManager) LoadCdnNodes(conf config.Config) error {
-	for _, cdn := range conf.CdnNodes {
-		if cdn.Account == "" || cdn.Endpoint == "" {
-			continue
-		}
-		node := CdnNode{
-			Account:  cdn.Account,
-			Endpoint: cdn.Endpoint,
-		}
-		ava := CheckNodeAvailable(&node)
-		node.Available = ava
-		actl, ok := m.cdnNodes.LoadOrStore(cdn.Account, node)
-		if ok {
-			node = actl.(CdnNode)
-			if !node.Available && ava {
-				node.Available = true
-				m.cdnNodes.Store(cdn.Account, node)
-			}
-		}
-	}
-	var index int64
-	for {
-		addr, err := m.cli.QueryCdnL1NodeByIndex(index)
-		if err != nil {
-			logger.GetLogger(config.LOG_NODE).Error("query cdn node info error ", err.Error())
-			break
-		}
-		index++
-		info, err := m.cli.QueryRegisterInfo(addr)
-		if err != nil {
-			logger.GetLogger(config.LOG_NODE).Error("query cdn node info error ", err.Error())
-			continue
-		}
-		node := CdnNode{
-			Account:  addr.Hex(),
-			Endpoint: info.Endpoint,
-		}
-		node.Available = CheckNodeAvailable(&node)
-		m.cdnNodes.LoadOrStore(node.Account, node)
-	}
-	return nil
-}
-
-func (m *ProvideManager) SubscribeMessageFromCdnNodes(ctx context.Context, taskCh chan<- *redis.Message, channels ...string) error {
-	m.cdnNodes.Range(func(key, value any) bool {
-		node := value.(CdnNode)
+func (m *ProvideManager) SubscribeMessageFromRetrievers(ctx context.Context, taskCh chan<- *redis.Message, channels ...string) error {
+	m.RangeRetriever(func(key string, node Retriever) bool {
 		if node.RedisAddress != "" && node.redisCli == nil {
 			node.redisCli = client.NewRedisClient(node.RedisAddress, "provider", "cd2n.provider")
 			ants.Submit(func() { client.SubscribeMessage(node.redisCli, ctx, taskCh, channels...) })
-			m.cdnNodes.Store(key, node)
+			m.UpdateRetriever(key, node)
 		}
 		return true
 	})
@@ -443,11 +370,14 @@ func CheckNodeAvailable(node any) bool {
 	switch n := node.(type) {
 	case *Storage:
 		return client.CheckStorageNodeAvailable(n.Endpoint) == nil
-	case *CdnNode:
+	case *Retriever:
 		info, err := client.CheckCdnNodeAvailable(n.Endpoint)
 		if err != nil {
 			logger.GetLogger(config.LOG_NODE).Error("check cdn node available error ", err.Error())
 			return false
+		}
+		if n.Account == "" {
+			n.Account = info.WorkAddr
 		}
 		n.TeePubkey = info.TeePubkey
 		n.IsGateway = info.IsGateway

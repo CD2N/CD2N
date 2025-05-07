@@ -24,6 +24,76 @@ import (
 	"github.com/pkg/errors"
 )
 
+func (h *ServerHandle) LightningUpload(c *gin.Context) {
+	value, ok := c.Get("user")
+	if !ok {
+		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "lightning upload error", "bad user info"))
+		return
+	}
+	user, ok := value.(auth.UserInfo)
+	if !ok || user.Account == nil {
+		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "lightning upload error", "bad user info"))
+		return
+	}
+	fid := c.PostForm("fid")
+	if fid == "" {
+		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "lightning upload error", "bad file ID"))
+		return
+	}
+	filename := c.PostForm("file_name")
+	if filename == "" {
+		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "lightning upload error", "bad file name"))
+		return
+	}
+	territory := c.PostForm("territory")
+	if territory == "" {
+		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "lightning upload error", "invalid territory"))
+	}
+	hash, err := h.gateway.CreateFlashStorageOrder(user.Account, fid, filename, territory)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusInternalServerError, "lightning upload error", err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, client.NewResponse(http.StatusOK, "success", hash))
+}
+
+func (h *ServerHandle) UploadLocalFile(c *gin.Context) {
+	value, ok := c.Get("user")
+	if !ok {
+		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", "bad user info"))
+		return
+	}
+	user, ok := value.(auth.UserInfo)
+	if !ok || user.Account == nil {
+		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", "bad user info"))
+		return
+	}
+	territory := c.PostForm("territory")
+	if territory == "" {
+		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", "invalid territory"))
+		return
+	}
+	fpath := c.PostForm("file_path")
+	if fpath == "" {
+		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", "invalid file path"))
+		return
+	}
+	filename := c.PostForm("file_name")
+	if filename == "" {
+		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", "invalid file name"))
+		return
+	}
+	async := c.PostForm("async") == "true"
+	noProxy := c.PostForm("noProxy") == "true"
+
+	src, err := os.Open(fpath)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "upload user file error", err.Error()))
+		return
+	}
+	h.uploadFile(c, src, user.Account, territory, filename, async, noProxy)
+}
+
 func (h *ServerHandle) UploadUserFileTemp(c *gin.Context) {
 	acc := c.PostForm("account")
 	pubkey, err := utils.ParsingPublickey(acc)

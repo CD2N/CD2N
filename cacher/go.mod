@@ -3,7 +3,7 @@ module github.com/CD2N/CD2N/cacher
 go 1.22.10
 
 require (
-	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250326075856-fdda6334cf3a
+	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250429095320-681b38d417a2
 	github.com/centrifuge/go-substrate-rpc-client/v4 v4.2.1
 	github.com/cosmos/go-bip39 v1.0.0
 	github.com/ecies/go/v2 v2.0.10
@@ -51,6 +51,7 @@ require (
 	github.com/mimoo/StrobeGo v0.0.0-20220103164710-9a04d6ca976b // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mmcloughlin/addchain v0.4.0 // indirect
+	github.com/panjf2000/ants v1.3.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.2 // indirect
 	github.com/pierrec/xxHash v0.1.5 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect

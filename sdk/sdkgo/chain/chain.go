@@ -186,12 +186,16 @@ func (c *Client) SubmitExtrinsic(keypair signature.KeyringPair, call types.Call,
 			if eventName == "" {
 				return hash, nil
 			}
+
 			events, err := c.Retriever.GetEvents(status.AsInBlock)
 			if err != nil {
 				return hash, errors.Wrap(err, "submit extrinsic error")
 			}
 			e, err := ParseTxResult(keypair, events, eventName)
 			if err != nil {
+				if errors.Unwrap(err) == ErrTxEventNotFound {
+					continue
+				}
 				return hash, errors.Wrap(err, "submit extrinsic error")
 			}
 			if e != nil && event != nil {

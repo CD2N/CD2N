@@ -115,7 +115,8 @@ func RegisterHandles(router *gin.Engine, h *handles.ServerHandle) {
 	router.GET("/querydata/:did", h.QueryData)
 	router.POST("/cache-fetch", h.FetchCacheData)
 	router.POST("/provide", h.ProvideData)
-	if !config.GetConfig().LaunchGateway {
+	conf := config.GetConfig()
+	if !conf.LaunchGateway {
 		return
 	}
 	router.POST("/claim", h.ClaimFile)
@@ -131,4 +132,9 @@ func RegisterHandles(router *gin.Engine, h *handles.ServerHandle) {
 	gateway.POST("/upload/file", h.UploadUserFile)
 	gateway.POST("/part-upload", h.RequestPartsUpload)
 	gateway.POST("/upload/part", h.UploadFileParts)
+
+	if !conf.DisableLocalSvc {
+		gateway.POST("/upload/local", h.UploadLocalFile)
+		gateway.POST("/upload/light", h.LightningUpload)
+	}
 }
