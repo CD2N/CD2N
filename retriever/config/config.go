@@ -1,7 +1,9 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -17,7 +19,6 @@ type Config struct {
 }
 
 type DiskConfig struct {
-	IpfsDiskSize     int64
 	FileBufferSize   int64
 	GatewayCacheSize int64
 	WorkSpace        string
@@ -46,7 +47,6 @@ type ServerConfig struct {
 	DisableLocalSvc bool // Whether to disable local service
 	LaunchGateway   bool
 	Debug           bool
-	IpfsAddress     string //ifps host:port
 	RedisAddress    string //redis host:port
 	RedisLoacl      string
 	TeeAddress      string
@@ -162,6 +162,8 @@ func InitConfig() error {
 		}
 		conf.RedisLoacl = fmt.Sprintf("redis_host:%s", s[len(s)-1])
 	}
+	jb, _ := json.Marshal(conf.DiskConfig)
+	log.Println("init disk config:", string(jb))
 	return nil
 }
 

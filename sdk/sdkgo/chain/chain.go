@@ -193,7 +193,7 @@ func (c *Client) SubmitExtrinsic(keypair signature.KeyringPair, call types.Call,
 			}
 			e, err := ParseTxResult(keypair, events, eventName)
 			if err != nil {
-				if errors.Unwrap(err) == ErrTxEventNotFound {
+				if errors.Is(err, ErrTxEventNotFound) {
 					continue
 				}
 				return hash, errors.Wrap(err, "submit extrinsic error")
