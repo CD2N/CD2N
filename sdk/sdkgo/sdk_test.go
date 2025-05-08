@@ -2,9 +2,15 @@ package sdkgo_test
 
 import (
 	"testing"
-	"time"
+
+	"github.com/pkg/errors"
 )
 
-func TestUTC(t *testing.T) {
-	t.Log(time.Now().Unix())
+var (
+	ErrorNotFound = errors.New("not found")
+)
+
+func TestErrorWarp(t *testing.T) {
+	err := errors.Wrap(ErrorNotFound, "test error warp")
+	t.Log(errors.Unwrap(errors.Unwrap(err)))
 }

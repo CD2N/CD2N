@@ -68,7 +68,7 @@ func (g *Gateway) ProvideFile(ctx context.Context, buffer *buffer.FileBuffer, ex
 	if !nonProxy {
 		hash, err = g.CreateStorageOrder(info)
 		if err != nil {
-			logger.GetLogger(config.LOG_PROVIDER).Error(errors.Wrap(err, "provide file error "), info.String())
+			logger.GetLogger(config.LOG_PROVIDER).Error(errors.Wrap(err, "provide file error "))
 			return errors.Wrap(err, "provide file error")
 		} else {
 			logger.GetLogger(config.LOG_PROVIDER).Infof("create storage order for file %s, tx hash is %s \n", info.Fid, hash)
@@ -188,6 +188,9 @@ func (g *Gateway) FetchFile(ctx context.Context, fid, did, token string) (string
 		return fpath, errors.Wrap(errors.New("subtask done"), "fetch file error")
 	}
 	fpath = filepath.Join(task.BaseDir, task.Fragments[subTask.Index][subTask.GroupId])
+	if _, err := os.Stat(fpath); err != nil {
+		return fpath, errors.Wrap(errors.New("the data has expired"), "fetch file error")
+	}
 	subTask.Index++
 	task.SubTasks[token] = subTask
 	err = client.PutData(g.taskRecord, fid, task)
@@ -233,11 +236,14 @@ func (g *Gateway) checker(ctx context.Context, buffer *buffer.FileBuffer) error 
 			if ftask.WorkDone || gcflag {
 				if gcflag {
 					TaskGc(buffer, ftask)
+					logger.GetLogger(config.LOG_PROVIDER).Infof("file %s expires and task is collected. \n", fid)
+				} else {
+					logger.GetLogger(config.LOG_PROVIDER).Infof("file %s distribute workflow done. \n", fid)
 				}
 				g.pstats.TaskDone(fid)
 				g.keyLock.RemoveLock(fid)
 				client.DeleteData(g.taskRecord, fid)
-				logger.GetLogger(config.LOG_PROVIDER).Infof("file %s distribute workflow done. \n", fid)
+
 				return nil
 			}
 			done := 0

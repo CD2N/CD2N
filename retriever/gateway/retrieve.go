@@ -258,6 +258,8 @@ func (g *Gateway) GetDataFromRemote(did, fpath string, node Cd2nNode) error {
 	headers := map[string]string{"Content-Type": "application/json"}
 	bytes, err := client.SendHttpRequest(http.MethodPost, u, headers, bytes.NewBuffer(jbytes))
 	if err != nil {
+		node.FailedCount++
+		g.nodes.Store(node.WorkAddr, node)
 		return errors.Wrap(err, "retrieve data from remote error")
 	}
 	f, err := os.Create(fpath)
@@ -265,8 +267,13 @@ func (g *Gateway) GetDataFromRemote(did, fpath string, node Cd2nNode) error {
 		return errors.Wrap(err, "retrieve data from remote  error")
 	}
 	defer f.Close()
-	_, err = f.Write(bytes)
-	return errors.Wrap(err, "retrieve data from remote  error")
+	n, err := f.Write(bytes)
+	if err != nil {
+		return errors.Wrap(err, "retrieve data from remote  error")
+	}
+	node.ReceiveBytes += uint64(n)
+	g.nodes.Store(node.WorkAddr, node)
+	return nil
 }
 
 func (g *Gateway) SignRequestTool() (string, []byte, error) {

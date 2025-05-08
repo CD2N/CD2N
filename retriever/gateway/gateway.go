@@ -140,7 +140,7 @@ func (g *Gateway) LoadOssNodes() error {
 		}
 		node.PoolId = data.PoolId
 		node.IsGateway = data.IsGateway
-		g.nodes.Store(data.WorkAddr, node)
+		g.nodes.LoadOrStore(data.WorkAddr, node)
 		logger.GetLogger(config.LOG_GATEWAY).Info("find a peer retrieval node ", node)
 	}
 	return errors.Wrap(err, "load oss nodes error")
@@ -178,7 +178,7 @@ func (g *Gateway) LoadCdnNodes() error {
 		}
 		node.PoolId = data.PoolId
 		node.IsGateway = data.IsGateway
-		g.nodes.Store(addr.Hex(), node)
+		g.nodes.LoadOrStore(addr.Hex(), node)
 	}
 	return errors.Wrap(err, "load cdn nodes error")
 }
@@ -415,6 +415,19 @@ func (g *Gateway) CreateFlashStorageOrder(owner []byte, fid, filename, territory
 		return hash, errors.Wrap(err, "create flash storage order error")
 	}
 	return hash, nil
+}
+
+func (g *Gateway) UpdateNodesLedger(key string, sendBytes int64) {
+	n, ok := g.nodes.Load(key)
+	if !ok {
+		return
+	}
+	node, ok := n.(Cd2nNode)
+	if !ok {
+		return
+	}
+	node.SendBytes += uint64(sendBytes)
+	g.nodes.Store(key, node)
 }
 
 func getFileHash(fid string) chain.FileHash {

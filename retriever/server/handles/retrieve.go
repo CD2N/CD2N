@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/CD2N/CD2N/retriever/config"
@@ -94,6 +95,15 @@ func (h *ServerHandle) FetchCacheData(c *gin.Context) {
 	} else { //The L2 nodes provide unencrypted data
 		fpath = task.DataPath
 		h.buffer.RemoveData(rpath)
+	}
+	if info, err := os.Stat(fpath); err != nil {
+		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "fetch data error", err.Error()))
+		return
+	} else {
+		if !strings.HasPrefix(req.UserAddr, "0x") {
+			req.UserAddr = "0x" + req.UserAddr
+		}
+		h.gateway.UpdateNodesLedger(req.UserAddr, info.Size())
 	}
 	c.File(fpath)
 	h.buffer.AddData(cid, fpath)
