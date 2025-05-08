@@ -47,7 +47,13 @@ func ParseTxResult(caller signature.KeyringPair, events []*parser.Event, eventNa
 			}
 		case "System.ExtrinsicFailed":
 			if capture {
-				jb, _ := json.Marshal(e.Fields)
+				var jb []byte
+				txFailed := types.EventSystemExtrinsicFailed{}
+				if err := DecodeEvent(e, &txFailed); err != nil {
+					jb, _ = json.Marshal(e.Fields)
+				} else {
+					jb, _ = json.Marshal(txFailed.DispatchError)
+				}
 				err = errors.New(fmt.Sprintf("extrinsic failed, event: %s", string(jb)))
 				return event, errors.Wrap(err, "parse tx events error")
 			}
