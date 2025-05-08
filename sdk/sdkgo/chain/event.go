@@ -17,7 +17,7 @@ var (
 	ErrTxEventNotFound = errors.New("tx event not found")
 )
 
-func ParseTxResult(caller signature.KeyringPair, events []*parser.Event, eventName string) (*parser.Event, error) {
+func (cli *Client) ParseTxResult(caller signature.KeyringPair, events []*parser.Event, eventName string) (*parser.Event, error) {
 	var (
 		event   *parser.Event
 		capture bool
@@ -47,15 +47,15 @@ func ParseTxResult(caller signature.KeyringPair, events []*parser.Event, eventNa
 			}
 		case "System.ExtrinsicFailed":
 			if capture {
-				var jb []byte
+				var eerr error
 				txFailed := types.EventSystemExtrinsicFailed{}
 				if err := DecodeEvent(e, &txFailed); err != nil {
-					jb, _ = json.Marshal(e.Fields)
+					jb, _ := json.Marshal(e.Fields)
+					eerr = errors.New(fmt.Sprintf("extrinsic failed: native event: %s", string(jb)))
 				} else {
-					jb, _ = json.Marshal(txFailed.DispatchError)
+					eerr = cli.ParseSystemEventError(txFailed)
 				}
-				err = errors.New(fmt.Sprintf("extrinsic failed, event: %s", string(jb)))
-				return event, errors.Wrap(err, "parse tx events error")
+				return event, eerr
 			}
 		}
 	}

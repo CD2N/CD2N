@@ -214,7 +214,7 @@ func TestChainSdkEvent(t *testing.T) {
 		t.Fatal(err)
 	}
 	fc := registry.NewFactory()
-	errReg, err := fc.CreateEventRegistry(cli.Metadata)
+	errReg, err := fc.CreateErrorRegistry(cli.Metadata)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,10 +223,7 @@ func TestChainSdkEvent(t *testing.T) {
 	// 	t.Fatal(err)
 	// }
 	for k, v := range errReg {
-		t.Log(k, v.Name, " Fields:")
-		for kk, vv := range v.Fields {
-			t.Log("		", kk, vv.Name, vv.LookupIndex)
-		}
+		t.Log(k, v.Name, " Fields:", v.Fields)
 	}
 }
 
