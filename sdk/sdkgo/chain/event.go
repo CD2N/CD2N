@@ -19,7 +19,8 @@ var (
 
 func ParseTxResult(caller signature.KeyringPair, events []*parser.Event, eventName string) (*parser.Event, error) {
 	var (
-		event *parser.Event
+		event   *parser.Event
+		capture bool
 	)
 	acc, err := types.NewAccountID(caller.PublicKey)
 	if err != nil {
@@ -30,9 +31,6 @@ func ParseTxResult(caller signature.KeyringPair, events []*parser.Event, eventNa
 		case eventName:
 			event = e
 		case "TransactionPayment.TransactionFeePaid", "EvmAccountMapping.TransactionFeePaid":
-			if event == nil {
-				continue
-			}
 			feePaid := types.EventTransactionPaymentTransactionFeePaid{}
 			if err := DecodeEvent(e, &feePaid); err != nil {
 				return event, errors.Wrap(err, "parse tx events error")
@@ -41,13 +39,14 @@ func ParseTxResult(caller signature.KeyringPair, events []*parser.Event, eventNa
 				event = nil
 				continue
 			}
-
+			capture = true
 		case "System.ExtrinsicSuccess":
+			capture = false
 			if event != nil {
 				return event, nil
 			}
 		case "System.ExtrinsicFailed":
-			if event != nil {
+			if capture {
 				jb, _ := json.Marshal(e.Fields)
 				err = errors.New(fmt.Sprintf("extrinsic failed, event: %s", string(jb)))
 				return event, errors.Wrap(err, "parse tx events error")
