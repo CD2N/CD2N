@@ -53,7 +53,7 @@ func OptionWithAccounts(mnemonics []string) Option {
 func OptionWithTimeout(timeout time.Duration) Option {
 	return func(c *Client) error {
 		if timeout <= 0 {
-			timeout = time.Second * 30
+			timeout = time.Second * 15
 		}
 		c.Timeout = timeout
 		return nil
@@ -193,9 +193,6 @@ func (c *Client) SubmitExtrinsic(keypair signature.KeyringPair, call types.Call,
 			}
 			e, err := ParseTxResult(keypair, events, eventName)
 			if err != nil {
-				if errors.Is(err, ErrTxEventNotFound) {
-					continue
-				}
 				return hash, errors.Wrap(err, "submit extrinsic error")
 			}
 			if e != nil && event != nil {

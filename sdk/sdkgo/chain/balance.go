@@ -39,7 +39,7 @@ func (c *Client) TransferToken(dest string, amount string, caller *signature.Key
 
 	blockhash, err := c.SubmitExtrinsic(key, newcall, "Balances.Transfer", event, c.Timeout)
 	if err != nil {
-		return "", errors.Wrap(err, "transfer token error")
+		return blockhash, errors.Wrap(err, "transfer token error")
 	}
 	return blockhash, nil
 }

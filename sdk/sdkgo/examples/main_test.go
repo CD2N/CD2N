@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"reflect"
-	"strings"
 	"testing"
 	"time"
 
@@ -215,24 +214,34 @@ func TestChainSdkEvent(t *testing.T) {
 		t.Fatal(err)
 	}
 	fc := registry.NewFactory()
-	re, err := fc.CreateEventRegistry(cli.Metadata)
+	errReg, err := fc.CreateEventRegistry(cli.Metadata)
 	if err != nil {
 		t.Fatal(err)
 	}
-	mp := make(map[string][]string)
-	for _, v := range re {
-		data := strings.Split(v.Name, ".")
-		if len(data) < 2 {
-			continue
-		}
-		s := mp[data[0]]
-		s = append(s, v.Name)
-		mp[data[0]] = s
-	}
-	for k, v := range mp {
-		t.Log(k, ":")
-		for _, d := range v {
-			t.Log("   ", d)
+	// jb, err := json.Marshal(errReg)
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+	for k, v := range errReg {
+		t.Log(k, v.Name, " Fields:")
+		for kk, vv := range v.Fields {
+			t.Log("		", kk, vv.Name, vv.LookupIndex)
 		}
 	}
+}
+
+func TestParseFailedEvent(t *testing.T) {
+	cli, err := chain.NewClient(
+		chain.OptionWithRpcs([]string{"wss://testnet-rpc.cess.network"}),
+		chain.OptionWithAccounts([]string{"father weird payment camp saddle assault dune knee network prize enemy liquid"}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash, err := cli.TransferToken("cXisZ8kRMxWmjHsuwYFd6SWCxskZyRyCRfLVxznXMEr8sXebA", "10000000000000000000000000", nil, nil)
+	if err != nil {
+		t.Log(hash)
+		t.Fatal(err)
+	}
+	t.Log("success", hash)
 }
