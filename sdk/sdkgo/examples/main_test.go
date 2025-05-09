@@ -9,7 +9,6 @@ import (
 
 	"github.com/CD2N/CD2N/sdk/sdkgo/chain"
 	r "github.com/CD2N/CD2N/sdk/sdkgo/retriever"
-	"github.com/centrifuge/go-substrate-rpc-client/v4/registry"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 )
@@ -213,18 +212,26 @@ func TestChainSdkEvent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fc := registry.NewFactory()
-	errReg, err := fc.CreateErrorRegistry(cli.Metadata)
+	Err, err := cli.Metadata.FindError(104, [4]types.U8{14, 0, 0, 0})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// jb, err := json.Marshal(errReg)
+	t.Log(Err)
+	// fc := registry.NewFactory()
+	// errReg, err := fc.CreateCallRegistry(cli.Metadata)
 	// if err != nil {
 	// 	t.Fatal(err)
 	// }
-	for k, v := range errReg {
-		t.Log(k, v.Name, " Fields:", v.Fields)
-	}
+	// // jb, err := json.Marshal(errReg)
+	// // if err != nil {
+	// // 	t.Fatal(err)
+	// // }
+	// for k, v := range errReg {
+	// 	t.Log(k, v.Name, " Fields:")
+	// 	for _, vv := range v.Fields {
+	// 		t.Log("		", vv.Name, vv.LookupIndex)
+	// 	}
+	// }
 }
 
 func TestParseFailedEvent(t *testing.T) {

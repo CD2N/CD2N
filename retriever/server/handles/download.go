@@ -14,6 +14,7 @@ import (
 
 	"github.com/CD2N/CD2N/retriever/config"
 	"github.com/CD2N/CD2N/retriever/libs/client"
+	"github.com/CD2N/CD2N/retriever/utils"
 	"github.com/CD2N/CD2N/sdk/sdkgo/chain"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
 	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
@@ -32,6 +33,10 @@ func (h *ServerHandle) GetDataInfo(c *gin.Context) {
 }
 
 func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
+	var targetPath string
+	if !config.GetConfig().DisableLocalSvc {
+		targetPath = c.Param("target")
+	}
 	fid := c.Param("fid")
 	if fid == "" {
 		c.JSON(http.StatusBadRequest,
@@ -62,7 +67,7 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 			}
 		}
 		logger.GetLogger(config.LOG_GATEWAY).Infof("get file %s from local disk cache, item: %v", key, item)
-		err = ServeFile(c, fname, fpath)
+		err = ServeFile(c, fname, fpath, targetPath)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError,
 				client.NewResponse(http.StatusInternalServerError, "download file error", err.Error()))
@@ -151,7 +156,7 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 	h.gateway.ReleaseCacheTask(key) //allows repeated calls to minimize key usage
 	logger.GetLogger(config.LOG_GATEWAY).Infof("get file %s from providers", fid)
 
-	err = ServeFile(c, string(fmeta.Owner[0].FileName), fpath)
+	err = ServeFile(c, string(fmeta.Owner[0].FileName), fpath, targetPath)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError,
 			client.NewResponse(http.StatusInternalServerError, "download file error", err.Error()))
@@ -196,7 +201,10 @@ func ParseFileRange(frange string) (int64, int64, error) {
 	return start, end, nil
 }
 
-func ServeFile(c *gin.Context, name, fpath string) error {
+func ServeFile(c *gin.Context, name, fpath, target string) error {
+	if target != "" {
+		return errors.Wrap(utils.CopyFile(fpath, target), "serve file error")
+	}
 	fileRange := c.Request.Header.Get("Range")
 	if fileRange != "" {
 		logger.GetLogger(config.LOG_GATEWAY).Infof("serve file %s for range request, range: %s", fpath, fileRange)

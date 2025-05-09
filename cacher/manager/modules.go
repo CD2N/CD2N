@@ -266,13 +266,13 @@ func (rm *RetrieverManager) LoadRetrievers(cli *evm.CacheProtoContract, conf con
 	for {
 		addr, err := cli.QueryCdnL1NodeByIndex(index)
 		if err != nil {
-			logger.GetLogger(config.LOG_NODE).Error("query cdn node info error ", err.Error())
+			//logger.GetLogger(config.LOG_NODE).Error("query cdn node info error ", err.Error())
 			break
 		}
 		index++
 		info, err := cli.QueryRegisterInfo(addr)
 		if err != nil {
-			logger.GetLogger(config.LOG_NODE).Error("query cdn node info error ", err.Error())
+			//logger.GetLogger(config.LOG_NODE).Error("query cdn node info error ", err.Error())
 			continue
 		}
 		node := Retriever{

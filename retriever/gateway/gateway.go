@@ -31,7 +31,7 @@ import (
 type Status struct {
 	Ongoing  uint64
 	Done     uint64
-	Expired  uint64
+	Retried  uint64
 	FidNum   uint64
 	DlingNum uint64
 }
@@ -75,7 +75,7 @@ func NewGateway(redisCli *redis.Client, contract *evm.CacheProtoContract, cacher
 		pstats: &task.ProvideStat{
 			Ongoing: &atomic.Int64{},
 			Done:    &atomic.Int64{},
-			Expired: &atomic.Int64{},
+			Retried: &atomic.Int64{},
 			Fids:    &sync.Map{},
 		},
 		DealMap:    &sync.Map{},
@@ -100,7 +100,7 @@ func (g *Gateway) GatewayStatus() Status {
 	return Status{
 		Ongoing: uint64(g.pstats.Ongoing.Load()),
 		Done:    uint64(g.pstats.Done.Load()),
-		Expired: uint64(g.pstats.Expired.Load()),
+		Retried: uint64(g.pstats.Retried.Load()),
 		FidNum:  num,
 	}
 }

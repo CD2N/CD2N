@@ -349,6 +349,8 @@ func BuildWorkspace(workspace string) error {
 func (h *ServerHandle) GetNodeInfo(c *gin.Context) {
 	conf := config.GetConfig()
 	gatewayStatus := h.gateway.GatewayStatus()
+	cacheStatus := h.gateway.FileCacher.BufferStatus()
+	bufferStatus := h.buffer.BufferStatus()
 	nodeStatus := h.node.NodeStatus()
 	c.JSON(http.StatusOK,
 		client.NewResponse(http.StatusOK, "succes", client.Cd2nNode{
@@ -360,11 +362,18 @@ func (h *ServerHandle) GetNodeInfo(c *gin.Context) {
 			EndPoint:  conf.Endpoint,
 			RedisAddr: conf.RedisAddress,
 			Status: client.Status{
-				DiskStatus: client.DiskStatus{},
+				DiskStatus: client.DiskStatus{
+					UsedCacheSize:  cacheStatus.UsedSize,
+					CacheItemNum:   cacheStatus.ItemNum,
+					CacheUsage:     cacheStatus.Usage,
+					UsedBufferSize: bufferStatus.UsedSize,
+					BufferItemNum:  bufferStatus.ItemNum,
+					BufferUsage:    bufferStatus.Usage,
+				},
 				DistStatus: client.DistStatus{
 					Ongoing: gatewayStatus.Ongoing,
 					Done:    gatewayStatus.Done,
-					Expired: gatewayStatus.Expired,
+					Retried: gatewayStatus.Retried,
 					FidNum:  gatewayStatus.FidNum,
 				},
 				RetrieveStatus: client.RetrieveStatus{
