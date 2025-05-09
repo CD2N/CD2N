@@ -93,6 +93,18 @@ func CalcSha256Hash(datas ...[]byte) []byte {
 	return hash.Sum(nil)
 }
 
+func CalcSHA256(data []byte) (string, error) {
+	if len(data) <= 0 {
+		return "", errors.New("data is nil")
+	}
+	h := sha256.New()
+	_, err := h.Write(data)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
+}
+
 func GetRandomBytes() ([]byte, error) {
 	k := make([]byte, 32)
 	if _, err := rand.Read(k); err != nil {
@@ -226,22 +238,17 @@ func Remove0x(hex string) string {
 	return hex
 }
 
-// func CatNamePath(name, path string) string {
-// 	return fmt.Sprintf("%s-=+>%s", name, path)
-// }
-
-// func SplitNamePath(namepath string) (string, string) {
-// 	strs := strings.Split(namepath, "-=+>")
-// 	if len(strs) != 2 {
-// 		return UNNAMED_FILENAME, strs[len(strs)-1]
-// 	}
-// 	return strs[0], strs[1]
-// }
-
-// func ExtraPath(fpath string) string {
-// 	n, p := SplitNamePath(fpath)
-// 	if strings.Contains(n, UNNAMED_FILENAME) {
-// 		p = fpath
-// 	}
-// 	return p
-// }
+func CopyFile(src, dist string) error {
+	dfile, err := os.Create(dist)
+	if err != nil {
+		return err
+	}
+	defer dfile.Close()
+	sfile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer sfile.Close()
+	_, err = io.Copy(dfile, sfile)
+	return err
+}

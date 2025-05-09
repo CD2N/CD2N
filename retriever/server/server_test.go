@@ -16,7 +16,8 @@ import (
 	"github.com/CD2N/CD2N/retriever/libs/client"
 	"github.com/CD2N/CD2N/retriever/libs/task"
 	utils2 "github.com/CD2N/CD2N/retriever/utils"
-	"github.com/CESSProject/cess-go-sdk/utils"
+
+	//"github.com/CESSProject/cess-go-sdk/utils"
 	ecies "github.com/ecies/go/v2"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -74,13 +75,13 @@ func TestChannel(t *testing.T) {
 // 	t.Log("success")
 // }
 
-func TestChangeAccount(t *testing.T) {
-	bytes, err := utils.ParsingPublickey("cXi4TiTDwio5LAF63UAw5uBhviQqa1WCVvBtaq7kVq278YLZf")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Log(bytes)
-}
+// func TestChangeAccount(t *testing.T) {
+// 	bytes, err := utils.ParsingPublickey("cXi4TiTDwio5LAF63UAw5uBhviQqa1WCVvBtaq7kVq278YLZf")
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	t.Log(bytes)
+// }
 
 func TestDealSubTask(t *testing.T) {
 	var task task.ProvideTask

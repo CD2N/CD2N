@@ -53,7 +53,7 @@ func (cli *Client) ParseTxResult(caller signature.KeyringPair, events []*parser.
 					jb, _ := json.Marshal(e.Fields)
 					eerr = errors.New(fmt.Sprintf("extrinsic failed: native event: %s", string(jb)))
 				} else {
-					eerr = cli.ParseSystemEventError(txFailed)
+					eerr = cli.ParseSystemEventError(txFailed.DispatchError.ModuleError)
 				}
 				return event, eerr
 			}

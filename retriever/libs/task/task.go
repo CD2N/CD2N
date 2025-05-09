@@ -61,7 +61,7 @@ type ProvideSubTask struct {
 type ProvideStat struct {
 	Ongoing *atomic.Int64
 	Done    *atomic.Int64
-	Expired *atomic.Int64
+	Retried *atomic.Int64
 	Fids    *sync.Map
 }
 
@@ -156,7 +156,7 @@ func (ps *ProvideStat) TaskFlash(fid string) {
 	if _, ok := ps.Fids.LoadOrStore(fid, struct{}{}); !ok {
 		ps.Ongoing.Add(1)
 	} else {
-		ps.Expired.Add(1)
+		ps.Retried.Add(1)
 	}
 }
 

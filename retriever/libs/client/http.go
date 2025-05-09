@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -96,7 +95,7 @@ type DiskStatus struct {
 type DistStatus struct {
 	Ongoing uint64 `json:"ongoing"`
 	Done    uint64 `json:"done"`
-	Expired uint64 `json:"expired"`
+	Retried uint64 `json:"retried"`
 	FidNum  uint64 `json:"fid_num"`
 }
 
@@ -268,7 +267,6 @@ func CheckCdnNodeAvailable(baseUrl string) (Cd2nNode, error) {
 		return info, errors.Wrap(err, "get CDN node status error")
 	}
 	err = json.Unmarshal(data, &Response{Data: &info})
-	log.Println("cd2n node from remote", info, err)
 	if err != nil {
 		return info, errors.Wrap(err, "get CDN node status error")
 	}

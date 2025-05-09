@@ -1,14 +1,11 @@
 package chain
 
 import (
-	"crypto/md5"
-	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"time"
 
 	rpc "github.com/centrifuge/go-substrate-rpc-client/v4"
-	"github.com/centrifuge/go-substrate-rpc-client/v4/registry"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/registry/retriever"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/registry/state"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
@@ -24,10 +21,9 @@ type Client struct {
 	GenesisBlockHash types.Hash
 	RuntimeVersion   *types.RuntimeVersion
 	*rpc.SubstrateAPI
-	Retriever  retriever.EventRetriever
-	Timeout    time.Duration
-	ErrorTypes map[string]string
-	Metadata   *types.Metadata
+	Retriever retriever.EventRetriever
+	Timeout   time.Duration
+	Metadata  *types.Metadata
 }
 
 type Option func(*Client) error
@@ -105,39 +101,21 @@ func NewClient(opts ...Option) (*Client, error) {
 	if err != nil {
 		return client, errors.Wrap(err, "new cess chain client error")
 	}
-	if err = client.parseErrorTypes(); err != nil {
-		return client, errors.Wrap(err, "new cess chain client error")
-	}
 	if client.Timeout <= 0 {
 		client.Timeout = time.Second * 30
 	}
 	return client, nil
 }
 
-func (c *Client) parseErrorTypes() error {
-	c.ErrorTypes = map[string]string{}
-	fc := registry.NewFactory()
-	errReg, err := fc.CreateErrorRegistry(c.Metadata)
+func (c *Client) ParseSystemEventError(t types.ModuleError) error {
+	e, err := c.Metadata.FindError(t.Index, t.Error)
 	if err != nil {
-		return errors.Wrap(err, "parse error types error")
+		return errors.Wrap(err, "extrinsic failed")
 	}
-	h := md5.New()
-	for k, v := range errReg {
-		h.Reset()
-		h.Write(fmt.Appendf(nil, "%v%v", k.ModuleIndex, k.ErrorIndex))
-		c.ErrorTypes[hex.EncodeToString(h.Sum(nil))] = v.Name
+	if e == nil || e.Name == "" || e.Name == "InvalidSpecName" {
+		return errors.Wrap(errors.New("unknown event type"), "extrinsic failed")
 	}
-	return nil
-}
-
-func (c *Client) ParseSystemEventError(t types.EventSystemExtrinsicFailed) error {
-	h := md5.New()
-	h.Write(fmt.Appendf(nil, "%v%v", t.DispatchError.ModuleError.Index, t.DispatchError.ModuleError.Error))
-	msg := c.ErrorTypes[hex.EncodeToString(h.Sum(nil))]
-	if msg == "" || msg == "System.InvalidSpecName" {
-		msg = fmt.Sprintf("unknown error, module{index:%v, error: %v}", t.DispatchError.ModuleError.Index, t.DispatchError.ModuleError.Error)
-	}
-	return errors.Wrap(errors.New(msg), "extrinsic failed")
+	return errors.Wrap(fmt.Errorf("%s: %s", e.Name, e.Value), "extrinsic failed")
 }
 
 func (c *Client) NewSubstrateAPI() error {

@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	"github.com/CD2N/CD2N/retriever/config"
-	"github.com/CESSProject/cess-go-sdk/utils"
 	"github.com/klauspost/reedsolomon"
 )
 
@@ -43,7 +42,7 @@ func ReedSolomon(file string, saveDir string) ([]string, error) {
 	}
 
 	for _, shard := range shards {
-		hash, err := utils.CalcSHA256(shard)
+		hash, err := CalcSHA256(shard)
 		if err != nil {
 			return shardspath, err
 		}
@@ -58,10 +57,6 @@ func ReedSolomon(file string, saveDir string) ([]string, error) {
 }
 
 func ReedSolomonWithHandle(file []byte, handle func([]byte) error) error {
-	// defer func() {
-	// 	runtime.GC()
-	// 	debug.FreeOSMemory()
-	// }()
 	enc, err := reedsolomon.New(config.FRAGMENTS_NUM, config.PARITY_NUM)
 	if err != nil {
 		return err
