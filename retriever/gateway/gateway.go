@@ -97,8 +97,9 @@ func (g *Gateway) GatewayStatus() Status {
 			num++
 			return true
 		})
+	ongoing := max(g.pstats.Ongoing.Load(), 0)
 	return Status{
-		Ongoing: uint64(g.pstats.Ongoing.Load()),
+		Ongoing: uint64(ongoing),
 		Done:    uint64(g.pstats.Done.Load()),
 		Retried: uint64(g.pstats.Retried.Load()),
 		FidNum:  num,

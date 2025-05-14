@@ -29,25 +29,6 @@ func (mg *Manager) GetDataCid(dataId string) (string, error) {
 	return CID, nil
 }
 
-// func (mg *Manager) RetrieveLocalData(ctx context.Context, cid string) (string, error) {
-// 	fpath, err := mg.databuf.NewBufPath(cid)
-// 	if err != nil {
-// 		return fpath, errors.Wrap(err, "receive local data error")
-// 	}
-// 	err = client.GetFileInIpfs(mg.ipfsCli, ctx, cid, fpath)
-// 	if err != nil {
-// 		return fpath, errors.Wrap(err, "receive local data error")
-// 	}
-// 	mg.databuf.AddData(cid, fpath)
-// 	mg.cacher.Get(cid)
-// 	return fpath, nil
-// }
-
-// func (mg *Manager) QueryLocalData(ctx context.Context, cid string) (bool, error) {
-// 	ok, err := client.QueryFileInIpfs(mg.ipfsCli, ctx, cid)
-// 	return ok, errors.Wrap(err, "receive local data error")
-// }
-
 func (mg *Manager) GetRetrieveTask(ctx context.Context, tid string) (task.RetrieveTask, error) {
 	var rtask task.RetrieveTask
 	data := client.GetMessage(mg.redisCli, ctx, tid)

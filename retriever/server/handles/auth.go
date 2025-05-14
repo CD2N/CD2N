@@ -34,7 +34,7 @@ func (h *ServerHandle) GenToken(c *gin.Context) {
 	//check message
 	unix, err := strconv.ParseInt(msg, 10, 64)
 	if err != nil {
-		resp := client.NewResponse(http.StatusInternalServerError, "login error", err.Error())
+		resp := client.NewResponse(http.StatusInternalServerError, "login error", "The timestamp format is incorrect")
 		c.JSON(resp.Code, resp)
 		return
 	}
@@ -67,7 +67,8 @@ func ParsingAndVerifyPublickey(acc, message, sign string) ([]byte, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "parsing and verifying account error")
 	}
-	msg := sha256.Sum256([]byte(message))
+	hd := sha256.Sum256([]byte(message))
+	msg := append([]byte("<Bytes>"), append(hd[:], []byte("</Bytes>")...)...)
 
 	if strings.HasPrefix(acc, ACCPREFIX_CESS_MAINNET) || strings.HasPrefix(acc, ACCPREFIX_CESS_TESTNET) {
 		pubkey, err := utils.ParsingPublickey(acc)

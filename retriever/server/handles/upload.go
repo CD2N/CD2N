@@ -17,9 +17,11 @@ import (
 	"github.com/CD2N/CD2N/retriever/libs/client"
 	"github.com/CD2N/CD2N/retriever/libs/task"
 	"github.com/CD2N/CD2N/retriever/server/auth"
+	"github.com/CD2N/CD2N/retriever/server/response"
 	"github.com/CD2N/CD2N/retriever/utils"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
 	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
+	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 )
@@ -27,60 +29,60 @@ import (
 func (h *ServerHandle) LightningUpload(c *gin.Context) {
 	value, ok := c.Get("user")
 	if !ok {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "lightning upload error", "bad user info"))
+		c.JSON(http.StatusBadRequest, client.NewResponse(response.CODE_UP_ERROR, "lightning upload error", "bad user info"))
 		return
 	}
 	user, ok := value.(auth.UserInfo)
 	if !ok || user.Account == nil {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "lightning upload error", "bad user info"))
+		c.JSON(http.StatusBadRequest, client.NewResponse(response.CODE_UP_ERROR, "lightning upload error", "bad user info"))
 		return
 	}
 	fid := c.PostForm("fid")
 	if fid == "" {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "lightning upload error", "bad file ID"))
+		c.JSON(http.StatusBadRequest, client.NewResponse(response.CODE_UP_ERROR, "lightning upload error", "bad file ID"))
 		return
 	}
 	filename := c.PostForm("file_name")
 	if filename == "" {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "lightning upload error", "bad file name"))
+		c.JSON(http.StatusBadRequest, client.NewResponse(response.CODE_UP_ERROR, "lightning upload error", "bad file name"))
 		return
 	}
 	territory := c.PostForm("territory")
 	if territory == "" {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "lightning upload error", "invalid territory"))
+		c.JSON(http.StatusBadRequest, client.NewResponse(response.CODE_UP_ERROR, "lightning upload error", "invalid territory"))
 	}
 	hash, err := h.gateway.CreateFlashStorageOrder(user.Account, fid, filename, territory)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusInternalServerError, "lightning upload error", err.Error()))
+		c.JSON(http.StatusBadRequest, client.NewResponse(response.CODE_UP_ERROR, "lightning upload error", err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, client.NewResponse(http.StatusOK, "success", hash))
+	c.JSON(http.StatusOK, client.NewResponse(response.CODE_UP_SUCCESS, "success", hash))
 }
 
 func (h *ServerHandle) UploadLocalFile(c *gin.Context) {
 	value, ok := c.Get("user")
 	if !ok {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", "bad user info"))
+		c.JSON(http.StatusBadRequest, client.NewResponse(response.CODE_UP_ERROR, "upload user file error", "bad user info"))
 		return
 	}
 	user, ok := value.(auth.UserInfo)
 	if !ok || user.Account == nil {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", "bad user info"))
+		c.JSON(http.StatusBadRequest, client.NewResponse(response.CODE_UP_ERROR, "upload user file error", "bad user info"))
 		return
 	}
 	territory := c.PostForm("territory")
 	if territory == "" {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", "invalid territory"))
+		c.JSON(http.StatusBadRequest, client.NewResponse(response.CODE_UP_ERROR, "upload user file error", "invalid territory"))
 		return
 	}
 	fpath := c.PostForm("file_path")
 	if fpath == "" {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", "invalid file path"))
+		c.JSON(http.StatusBadRequest, client.NewResponse(response.CODE_UP_ERROR, "upload user file error", "invalid file path"))
 		return
 	}
 	filename := c.PostForm("file_name")
-	if filename == "" {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", "invalid file name"))
+	if filename == "" || len(filename) < 3 || len(filename) > 63 {
+		c.JSON(http.StatusOK, client.NewResponse(response.CODE_UP_INVALID_NAME, "upload user file error", "invalid file name"))
 		return
 	}
 	async := c.PostForm("async") == "true"
@@ -88,7 +90,7 @@ func (h *ServerHandle) UploadLocalFile(c *gin.Context) {
 
 	src, err := os.Open(fpath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "upload user file error", err.Error()))
+		c.JSON(http.StatusInternalServerError, client.NewResponse(response.CODE_UP_ERROR, "upload user file error", err.Error()))
 		return
 	}
 	h.uploadFile(c, src, user.Account, territory, filename, async, noProxy)
@@ -163,44 +165,102 @@ func (h *ServerHandle) uploadFile(c *gin.Context, file io.Reader, acc []byte, te
 	tmpName := hex.EncodeToString(utils.CalcSha256Hash(acc, []byte(territory+filename)))
 	fpath, err := h.buffer.NewBufPath(tmpName)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "upload file error", err.Error()))
+		c.JSON(http.StatusInternalServerError, client.NewResponse(response.CODE_UP_ERROR, "upload file error", err.Error()))
 		return
 	}
 	err = h.SaveDataToBuf(file, fpath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "upload  file error", err.Error()))
+		c.JSON(http.StatusInternalServerError, client.NewResponse(response.CODE_UP_ERROR, "upload  file error", err.Error()))
 		return
 	}
+	st := time.Now()
 	finfo, err := h.gateway.ProcessFile(h.buffer, filename, fpath, territory, acc)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "upload file error", err.Error()))
+		c.JSON(http.StatusInternalServerError, client.NewResponse(response.CODE_UP_ERROR, "upload file error", err.Error()))
 		return
 	}
-
-	logger.GetLogger(config.LOG_GATEWAY).Info("file upload: ", finfo.String())
+	logger.GetLogger(config.LOG_GATEWAY).Infof("file %s process time: %v", finfo.Fid, time.Since(st))
+	//logger.GetLogger(config.LOG_GATEWAY).Info("file upload: ", finfo.String())
 
 	cachePath, err := h.gateway.FileCacher.NewBufPath(finfo.Fid)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "upload file error", err.Error()))
+		c.JSON(http.StatusInternalServerError, client.NewResponse(response.CODE_UP_ERROR, "upload file error", err.Error()))
 		return
 	}
 	err = os.Rename(fpath, cachePath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "upload file error", err.Error()))
+		c.JSON(http.StatusInternalServerError, client.NewResponse(response.CODE_UP_ERROR, "upload file error", err.Error()))
 		return
 	}
 	h.gateway.FileCacher.AddData(finfo.Fid, buffer.CatNamePath(filename, cachePath))
 	if !async {
 		err = h.gateway.ProvideFile(context.Background(), h.buffer, time.Hour, finfo, false)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "upload file error", err.Error()))
+			c.JSON(http.StatusInternalServerError, client.NewResponse(response.CODE_UP_ERROR, "upload file error", err.Error()))
 			return
 		}
+		logger.GetLogger(config.LOG_GATEWAY).Infof("file %s create order time: %v", finfo.Fid, time.Since(st))
 		c.JSON(http.StatusOK, client.NewResponse(http.StatusOK, "success", finfo.Fid))
 		return
 	}
 	client.PutData(h.partRecord, config.DB_FINFO_PREFIX+finfo.Fid, task.AsyncFinfoBox{Info: finfo, NonProxy: noProxy})
+	//Precondition Check
+	resp := h.CheckPreconditions(finfo.Fid, territory, acc, finfo.FileSize)
+
+	if resp.Code == response.CODE_UP_ERROR {
+		c.JSON(http.StatusInternalServerError, resp)
+		return
+	} else if resp.Code != response.CODE_UP_SUCCESS || !noProxy {
+		c.JSON(http.StatusOK, resp)
+		return
+	}
 	c.JSON(http.StatusOK, client.NewResponse(http.StatusOK, "success", finfo))
+}
+
+func (h *ServerHandle) CheckPreconditions(fid, territory string, acc []byte, size int64) response.Response {
+	cli, err := h.gateway.GetCessClient()
+	if err != nil {
+		return response.NewResp(response.CODE_UP_ERROR, err.Error(), fid)
+	}
+	//Check if the gateway is authorized
+	osses, err := cli.QueryAuthList(acc, 0)
+	if err != nil {
+		return response.NewResp(response.CODE_UP_ERROR, err.Error(), fid)
+	}
+	key := cli.GetKeyInOrder()
+	cli.PutKey(key.Address)
+	self, err := types.NewAccountID(key.PublicKey)
+	if err != nil {
+		return response.NewResp(response.CODE_UP_ERROR, err.Error(), fid)
+	}
+	authed := false
+	for _, oss := range osses {
+		if self.Equal(&oss) {
+			authed = true
+		}
+	}
+	if !authed {
+		return response.NewResp(response.CODE_UP_NOT_AUTH, "The user has not authorized the gateway", fid)
+	}
+	//Check if the territory space is valid
+	tinfo, err := cli.QueryTerritory(acc, territory, 0)
+	if err != nil {
+		return response.NewResp(response.CODE_UP_ERROR, err.Error(), fid)
+	}
+	if tinfo.State != 0 || tinfo.RemainingSpace.Int64() < size {
+		return response.NewResp(response.CODE_UP_INSUFF_SPACE, "Insufficient territory space or not activated", fid)
+	}
+
+	fmeta, err := cli.QueryFileMetadata(fid, 0)
+	if err == nil {
+		for _, owner := range fmeta.Owner {
+			if self.Equal(&owner.User) {
+				return response.NewResp(response.CODE_UP_FILE_EXIST, "The user already owns the file", fid)
+			}
+		}
+	}
+
+	return response.NewResp(response.CODE_UP_SUCCESS, "success", fid)
 }
 
 func (h *ServerHandle) UploadFileParts(c *gin.Context) {

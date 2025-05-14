@@ -7,6 +7,14 @@ import (
 	"github.com/vedhavyas/go-subkey/scale"
 )
 
+const (
+	//0: Active 1: Frozen 2: Expired 3: OnConsignment
+	TERRITORY_ACTIVE = iota
+	TERRITORY_FROZEN
+	TERRITORY_EXPIRED
+	TERRITORY_ONCONSIGNMENT
+)
+
 type FileHash [64]types.U8
 type AccBytes [256]types.U8
 type BloomFilter [256]types.U64

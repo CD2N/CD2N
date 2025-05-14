@@ -3,7 +3,7 @@ module github.com/CD2N/CD2N/retriever
 go 1.23.0
 
 require (
-	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250508091243-838af10cdd5e
+	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250509083642-15dea38f1bc6
 	github.com/decred/base58 v1.0.5
 	github.com/ecies/go/v2 v2.0.10
 	github.com/ethereum/go-ethereum v1.15.2
@@ -26,6 +26,7 @@ require (
 )
 
 require (
+	github.com/bits-and-blooms/bloom/v3 v3.7.0 // indirect
 	github.com/ipfs/go-blockservice v0.5.2 // indirect
 	github.com/ipfs/go-ipfs-blockstore v1.3.1 // indirect
 	github.com/ipfs/go-ipfs-chunker v0.0.1 // indirect

@@ -70,6 +70,7 @@ func SignedSR25519WithMnemonic(mnemonic string, msg []byte) ([]byte, error) {
 	if err != nil {
 		return nil, errors.New("invalid mnemonic")
 	}
+	msg = append([]byte("<Bytes>"), append(msg, []byte("</Bytes>")...)...)
 	return pri.Sign(msg)
 }
 
@@ -167,16 +168,23 @@ func UploadFile(baseUrl, token, territory, filename string, file io.Reader) (str
 func AsyncUploadFile(baseUrl, token, territory, filename string, file io.Reader, noProxy bool) (FileInfo, error) {
 	var (
 		info FileInfo
+		fid  string
 	)
-	body, err := uploadFile(baseUrl, token, territory, filename, file, false, noProxy)
+	body, err := uploadFile(baseUrl, token, territory, filename, file, true, noProxy)
 	if err != nil {
 		return info, errors.Wrap(err, "asynchronous upload failed")
 	}
 	resp := Response{
-		Data: &info,
+		Data: &fid,
+	}
+	if noProxy {
+		resp.Data = &info
 	}
 	if err = json.Unmarshal(body, &resp); err != nil {
 		return info, errors.Wrap(err, "asynchronous upload failed")
+	}
+	if fid != "" && info.Fid == "" {
+		info.Fid = fid
 	}
 	return info, nil
 }
@@ -272,11 +280,11 @@ func AsyncUploadFileParts(baseUrl, token, fpath string, info *PartsInfo, noProxy
 		resp  Response
 		pid   string
 	)
-	body, err := uploadFileParts(baseUrl, token, fpath, info, false, false)
+	body, err := uploadFileParts(baseUrl, token, fpath, info, true, false)
 	if err != nil {
 		return finfo, errors.Wrap(err, "asynchronous upload failed")
 	}
-	if info.PartsCount == info.TotalParts {
+	if info.PartsCount == info.TotalParts && noProxy {
 		resp.Data = &finfo
 	} else {
 		resp.Data = &pid

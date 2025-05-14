@@ -153,11 +153,10 @@ func (ps *ProvideStat) TaskDone(fid string) {
 }
 
 func (ps *ProvideStat) TaskFlash(fid string) {
-	if _, ok := ps.Fids.LoadOrStore(fid, struct{}{}); !ok {
-		ps.Ongoing.Add(1)
-	} else {
+	if _, ok := ps.Fids.LoadOrStore(fid, struct{}{}); ok {
 		ps.Retried.Add(1)
 	}
+	ps.Ongoing.Add(1)
 }
 
 func (f FileInfo) String() string {

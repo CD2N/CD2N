@@ -208,6 +208,12 @@ func (c *Cache) LoadCacheRecords(fpath string) error {
 		return errors.Wrap(err, "load cache records")
 	}
 	for i := len(items) - 1; i > 0; i-- {
+		if items[i].Value == "" || items[i].Size <= 0 {
+			continue
+		}
+		if _, err := os.Stat(items[i].Value); err != nil {
+			continue
+		}
 		c.AddWithData(items[i].Key, items[i].Value, items[i].Size)
 	}
 	return nil
