@@ -68,7 +68,7 @@ func (g *Gateway) ProvideFile(ctx context.Context, buffer *buffer.FileBuffer, ex
 	if !nonProxy {
 		hash, err = g.CreateStorageOrder(info)
 		if err != nil {
-			logger.GetLogger(config.LOG_PROVIDER).Error(errors.Wrap(err, "provide file error "), " tx hash: ", hash)
+			logger.GetLogger(config.LOG_PROVIDER).Error(errors.Wrap(err, "provide file error "), ", tx hash: ", hash)
 			return errors.Wrap(err, "provide file error")
 		} else {
 			logger.GetLogger(config.LOG_PROVIDER).Infof("create storage order for file %s, tx hash is %s \n", info.Fid, hash)
