@@ -1,5 +1,5 @@
-github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250429095320-681b38d417a2 h1:ZZ4A+Qqcl8KeIA9m0RnjL9SOqPHLlDY+rZkiWyb44fI=
-github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250429095320-681b38d417a2/go.mod h1:jLHhp2nQHh6ujSPH60JdSkjE88sQTk30ub0HxgU+omc=
+github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250514101950-9156ab9e3c2d h1:AqfPreGAk0fyFmDSiGSfzoB4qjxc5XfCPS8wz+dob3M=
+github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250514101950-9156ab9e3c2d/go.mod h1:jLHhp2nQHh6ujSPH60JdSkjE88sQTk30ub0HxgU+omc=
 github.com/ChainSafe/go-schnorrkel v1.1.0 h1:rZ6EU+CZFCjB4sHUE1jIu8VDoB/wRKZxoe1tkcO71Wk=
 github.com/ChainSafe/go-schnorrkel v1.1.0/go.mod h1:ABkENxiP+cvjFiByMIZ9LYbRoNNLeBLiakC1XeTFxfE=
 github.com/DataDog/zstd v1.4.5 h1:EndNeuB0l9syBZhut0wns3gV1hL8zX8LIu6ZiVHWLIQ=

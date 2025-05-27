@@ -153,7 +153,7 @@ func (c Cache) RemoveItem(key string) {
 	defer c.lock.Unlock()
 	if v, ok := c.cache[key]; ok {
 		c.removeItem(v)
-		delete(c.cache, v.Key)
+		delete(c.cache, key)
 		c.cacheSize -= uint64(v.Size)
 		c.itemNum--
 	}

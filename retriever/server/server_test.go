@@ -16,6 +16,7 @@ import (
 	"github.com/CD2N/CD2N/retriever/libs/client"
 	"github.com/CD2N/CD2N/retriever/libs/task"
 	utils2 "github.com/CD2N/CD2N/retriever/utils"
+	"github.com/CD2N/CD2N/sdk/sdkgo/libs/tsproto"
 
 	//"github.com/CESSProject/cess-go-sdk/utils"
 	ecies "github.com/ecies/go/v2"
@@ -145,11 +146,11 @@ func TestSignVerify(t *testing.T) {
 
 func TestQueryTEEInfo(t *testing.T) {
 	teeEndpoint := "http://139.180.142.180:1309"
-	u, err := url.JoinPath(teeEndpoint, client.QUERY_TEE_INFO)
+	u, err := url.JoinPath(teeEndpoint, tsproto.QUERY_TEE_INFO)
 	if err != nil {
 		t.Fatal("join url path error", err)
 	}
-	data, err := client.QueryTeeInfo(u)
+	data, err := tsproto.QueryTeeInfo(u)
 	if err != nil {
 		t.Fatal("query tee info error", err)
 	}
@@ -297,7 +298,7 @@ func TestFetchCache(t *testing.T) {
 	if err != nil {
 		t.Fatal("sign error", err)
 	}
-	req := client.CacheRequest{
+	req := tsproto.CacheRequest{
 		Did:       "09903a15d3a982fb4348c45c91e816f318cf376e0fa278821bd35f1afcd7180a",
 		UserAddr:  userAcc.Hex()[2:],
 		RequestId: reqId,

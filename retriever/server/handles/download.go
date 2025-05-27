@@ -5,32 +5,21 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/CD2N/CD2N/retriever/config"
-	"github.com/CD2N/CD2N/retriever/libs/client"
+	"github.com/CD2N/CD2N/retriever/node"
 	"github.com/CD2N/CD2N/retriever/utils"
 	"github.com/CD2N/CD2N/sdk/sdkgo/chain"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
+	"github.com/CD2N/CD2N/sdk/sdkgo/libs/tsproto"
 	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
 )
-
-func (h *ServerHandle) GetDataInfo(c *gin.Context) {
-	sid := c.Param("segment")
-	record, err := h.gateway.GetDataInfo(sid)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "get data info error", err.Error()))
-		return
-	}
-	c.JSON(http.StatusOK, client.NewResponse(http.StatusOK, "success", record))
-}
 
 func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 	var targetPath string
@@ -40,7 +29,7 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 	fid := c.Param("fid")
 	if fid == "" {
 		c.JSON(http.StatusBadRequest,
-			client.NewResponse(http.StatusBadRequest, "download file error", "bad file id"))
+			tsproto.NewResponse(http.StatusBadRequest, "download file error", "bad file id"))
 		return
 	}
 	segment := c.Param("segment")
@@ -51,7 +40,7 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 	err := h.gateway.WaitFileCache(key, time.Minute)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError,
-			client.NewResponse(http.StatusInternalServerError, "download file error", err.Error()))
+			tsproto.NewResponse(http.StatusInternalServerError, "download file error", err.Error()))
 		return
 	}
 
@@ -70,20 +59,20 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 		err = ServeFile(c, fname, fpath, targetPath)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError,
-				client.NewResponse(http.StatusInternalServerError, "download file error", err.Error()))
+				tsproto.NewResponse(http.StatusInternalServerError, "download file error", err.Error()))
 		}
 		return
 	}
 	cessCli, err := h.gateway.GetCessClient()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError,
-			client.NewResponse(http.StatusInternalServerError, "download file error", err.Error()))
+			tsproto.NewResponse(http.StatusInternalServerError, "download file error", err.Error()))
 		return
 	}
 	fmeta, err := cessCli.QueryFileMetadata(fid, 0)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError,
-			client.NewResponse(http.StatusInternalServerError, "download file error", err.Error()))
+			tsproto.NewResponse(http.StatusInternalServerError, "download file error", err.Error()))
 		return
 	}
 	var (
@@ -91,12 +80,6 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 		dataPaths []string
 		segPaths  []string
 	)
-
-	defer func() {
-		for _, dpath := range dataPaths {
-			h.node.CalcDataCid(filepath.Base(dpath), dpath)
-		}
-	}()
 
 	for _, seg := range fmeta.SegmentList {
 		sid := string(seg.Hash[:])
@@ -114,34 +97,28 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 		fragPaths = h.GetDataFromDiskBuffer(fragments...) //retrieve from local buffer
 		logger.GetLogger(config.LOG_GATEWAY).Infof("get fragments from local disk buffer:%v", len(fragPaths))
 		if len(fragPaths) < config.FRAGMENTS_NUM { //retrieve from L2 node, triggered when cache miss, low efficiency
-			record, err := h.gateway.GetDataInfo(sid)
-			if err == nil && record.Fragments != nil {
-				u, err := url.JoinPath(h.teeEndpoint, client.AUDIT_DATA_URL)
-				if err != nil {
-					continue
-				}
-				logger.GetLogger(config.LOG_GATEWAY).Infof("get fragments from miner pool:%v", len(fragPaths))
-				fragPaths = append(fragPaths, h.gateway.RetrieveDatasInPool(h.node, h.buffer, time.Second*12, u, h.poolId, fid, fragments...)...)
-			} else {
-				ctx, cancel := context.WithTimeout(context.Background(), time.Second*24)
-				nodes := h.gateway.QueryDataFrom(sid)
-				fragPaths = append(fragPaths, h.gateway.RetrieveDataFromRemote(ctx, nodes, h.buffer, fid, fragments...)...)
-				logger.GetLogger(config.LOG_GATEWAY).Infof("get fragments from neighbor retriever:%v", len(fragPaths))
-				cancel()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+			task := node.NewCesRetrieveTask("", fid, sid, fragments)
+			paths, err := h.retr.RetrieveData(ctx, task)
+			cancel()
+			if err != nil {
+				continue
 			}
+			fragPaths = append(fragPaths, paths...)
+			logger.GetLogger(config.LOG_GATEWAY).Infof("get fragments from miner pool:%v", len(fragPaths))
 		}
 
 		dataPaths = append(dataPaths, fragPaths...)
 		//deal with fragments
 		if len(fragPaths) < config.FRAGMENTS_NUM {
 			c.JSON(http.StatusInternalServerError,
-				client.NewResponse(http.StatusInternalServerError, "download file error", "insufficient cached fragments"))
+				tsproto.NewResponse(http.StatusInternalServerError, "download file error", "insufficient cached fragments"))
 			return
 		}
 		segPath, err := h.gateway.CompositeSegment(sid, fragPaths)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError,
-				client.NewResponse(http.StatusInternalServerError, "download file error", err.Error()))
+				tsproto.NewResponse(http.StatusInternalServerError, "download file error", err.Error()))
 			return
 		}
 		segPaths = append(segPaths, segPath)
@@ -149,7 +126,7 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 	fpath, err := h.gateway.CombineFileIntoCache(fid, fmeta.FileSize.Int64(), segPaths)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError,
-			client.NewResponse(http.StatusInternalServerError, "download file error", err.Error()))
+			tsproto.NewResponse(http.StatusInternalServerError, "download file error", err.Error()))
 		return
 	}
 
@@ -159,7 +136,7 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 	err = ServeFile(c, string(fmeta.Owner[0].FileName), fpath, targetPath)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError,
-			client.NewResponse(http.StatusInternalServerError, "download file error", err.Error()))
+			tsproto.NewResponse(http.StatusInternalServerError, "download file error", err.Error()))
 	}
 
 }

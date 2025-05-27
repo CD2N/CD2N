@@ -17,7 +17,6 @@ import (
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/cache"
 	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/go-redis/redis/v8"
 	"github.com/spf13/cobra"
 )
 
@@ -153,7 +152,7 @@ func cmd_run_func(cmd *cobra.Command, args []string) {
 	contract, err := evm.NewProtoContract(
 		cli.GetEthClient(),
 		conf.ProtoContract,
-		cli.Account.Hex(),
+		conf.SecretKey,
 		cli.NewTransactionOption,
 		cli.SubscribeFilterLogs,
 	)
@@ -189,31 +188,9 @@ func cmd_run_func(cmd *cobra.Command, args []string) {
 		}
 	}
 
-	fmg, err := manager.NewFileManager(conf.SecretKey, cacheModule, 10240, selflessMode)
+	taskDispatcher, err := manager.NewTaskDispatcher(512)
 	if err != nil {
-		log.Println("new file manager error", err)
-		return
-	}
-
-	// filepath.Walk(filepath.Join(conf.WorkSpace, config.DEFAULT_BUFFER_DIR),
-	// 	func(path string, info fs.FileInfo, err error) error {
-	// 		os.RemoveAll(path)
-	// 		return nil
-	// 	},
-	// )
-
-	mg, err := manager.NewProvideManager(
-		cacheModule, fmg.GetTaskChannel(), contract,
-		filepath.Join(conf.WorkSpace, config.DEFAULT_DB_DIR),
-		filepath.Join(conf.WorkSpace, config.DEFAULT_BUFFER_DIR),
-	)
-	if err != nil {
-		log.Println("new provide manager error", err)
-		return
-	}
-
-	if err = mg.LoadStorageNodes(conf); err != nil {
-		log.Println("load storage nodes error", err)
+		log.Println(err)
 		return
 	}
 
@@ -237,54 +214,49 @@ func cmd_run_func(cmd *cobra.Command, args []string) {
 			return
 		}
 	}()
+	go taskDispatcher.SubscribeTasksFromRetrievers(ctx, contract, time.Minute*30, "provider", "cd2n.provider")
 
-	// go func() {
-	// 	err = mg.StorageTaskChecker(ctx)
-	// 	if err != nil {
-	// 		log.Println("storage status checker failed", err)
-	// 	}
-	// }()
-
-	taskCh := make(chan *redis.Message, 10240)
-	go func() {
-		ticker := time.NewTicker(time.Minute * 15)
-		for {
-			if err = mg.LoadRetrievers(contract, conf); err != nil {
-				log.Println("run subscribe task server error", err)
-				time.Sleep(time.Minute)
-				continue
-			}
-			if err := mg.SubscribeMessageFromRetrievers(ctx, taskCh, client.CHANNEL_PROVIDE, client.CHANNEL_RETRIEVE); err != nil {
-				log.Println("run subscribe task server error", err)
-			}
-			select {
-			case <-ticker.C:
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
+	cessAccessTaskExecutor, err := manager.NewCessAccessTaskExecutor(
+		conf.SecretKey, cacheModule, taskDispatcher.RetrieverManager, 512,
+		filepath.Join(conf.WorkSpace, config.DEFAULT_DB_DIR),
+		filepath.Join(conf.WorkSpace, config.DEFAULT_BUFFER_DIR), selflessMode,
+	)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	if err := cessAccessTaskExecutor.LoadStorageNodes(conf); err != nil {
+		log.Println(err)
+		return
+	}
 
 	go func() {
-		if err := fmg.RunTaskServer(ctx); err != nil {
-			log.Println("run task server error", err)
+		if err := cessAccessTaskExecutor.TaskExecutionServer(ctx); err != nil {
+			log.Println(err)
 			stop()
 			return
 		}
 	}()
+
 	go func() {
-		if err := mg.UpdateStorageNodeStatus(ctx, conf); err != nil {
-			log.Println("run update storage node server error", err)
+		if err := cessAccessTaskExecutor.UpdateStorageNodeStatus(ctx, conf); err != nil {
+			log.Println(err)
 			stop()
 			return
 		}
 	}()
+
+	//registering task executors
+
+	taskDispatcher.RegisterTaskExecutor(client.CHANNEL_PROVIDE, cessAccessTaskExecutor)
+	taskDispatcher.RegisterTaskExecutor(client.CHANNEL_RETRIEVE, cessAccessTaskExecutor)
+
+	//start the task dispatcher
 	logger.GetGlobalLogger().GetLogger(config.LOG_NODE).Info("🚀 CD2N Cacher is running ...")
 	log.Println("🚀 CD2N Cacher cache service is running ...")
-	err = mg.ExecuteTasks(ctx, taskCh)
-	if err != nil {
-		logger.GetGlobalLogger().GetLogger(config.LOG_NODE).Error("init ethereum client error", err)
-		log.Println("execute tasks error", err)
+	if err := taskDispatcher.TaskDispatch(ctx); err != nil {
+		logger.GetGlobalLogger().GetLogger(config.LOG_NODE).Error(err)
+		log.Println(err)
 		return
 	}
 	logger.GetGlobalLogger().GetLogger(config.LOG_NODE).Info("🔚 CD2N Cacher done.")

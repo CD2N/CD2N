@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -19,7 +20,9 @@ import (
 	"github.com/CD2N/CD2N/retriever/server/auth"
 	"github.com/CD2N/CD2N/retriever/server/response"
 	"github.com/CD2N/CD2N/retriever/utils"
+	"github.com/CD2N/CD2N/sdk/sdkgo/chain"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
+	"github.com/CD2N/CD2N/sdk/sdkgo/libs/tsproto"
 	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/gin-gonic/gin"
@@ -29,60 +32,60 @@ import (
 func (h *ServerHandle) LightningUpload(c *gin.Context) {
 	value, ok := c.Get("user")
 	if !ok {
-		c.JSON(http.StatusBadRequest, client.NewResponse(response.CODE_UP_ERROR, "lightning upload error", "bad user info"))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(response.CODE_UP_ERROR, "lightning upload error", "bad user info"))
 		return
 	}
 	user, ok := value.(auth.UserInfo)
 	if !ok || user.Account == nil {
-		c.JSON(http.StatusBadRequest, client.NewResponse(response.CODE_UP_ERROR, "lightning upload error", "bad user info"))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(response.CODE_UP_ERROR, "lightning upload error", "bad user info"))
 		return
 	}
 	fid := c.PostForm("fid")
 	if fid == "" {
-		c.JSON(http.StatusBadRequest, client.NewResponse(response.CODE_UP_ERROR, "lightning upload error", "bad file ID"))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(response.CODE_UP_ERROR, "lightning upload error", "bad file ID"))
 		return
 	}
 	filename := c.PostForm("file_name")
 	if filename == "" {
-		c.JSON(http.StatusBadRequest, client.NewResponse(response.CODE_UP_ERROR, "lightning upload error", "bad file name"))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(response.CODE_UP_ERROR, "lightning upload error", "bad file name"))
 		return
 	}
 	territory := c.PostForm("territory")
 	if territory == "" {
-		c.JSON(http.StatusBadRequest, client.NewResponse(response.CODE_UP_ERROR, "lightning upload error", "invalid territory"))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(response.CODE_UP_ERROR, "lightning upload error", "invalid territory"))
 	}
 	hash, err := h.gateway.CreateFlashStorageOrder(user.Account, fid, filename, territory)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, client.NewResponse(response.CODE_UP_ERROR, "lightning upload error", err.Error()))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(response.CODE_UP_ERROR, "lightning upload error", err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, client.NewResponse(response.CODE_UP_SUCCESS, "success", hash))
+	c.JSON(http.StatusOK, tsproto.NewResponse(response.CODE_UP_SUCCESS, "success", hash))
 }
 
 func (h *ServerHandle) UploadLocalFile(c *gin.Context) {
 	value, ok := c.Get("user")
 	if !ok {
-		c.JSON(http.StatusBadRequest, client.NewResponse(response.CODE_UP_ERROR, "upload user file error", "bad user info"))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(response.CODE_UP_ERROR, "upload user file error", "bad user info"))
 		return
 	}
 	user, ok := value.(auth.UserInfo)
 	if !ok || user.Account == nil {
-		c.JSON(http.StatusBadRequest, client.NewResponse(response.CODE_UP_ERROR, "upload user file error", "bad user info"))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(response.CODE_UP_ERROR, "upload user file error", "bad user info"))
 		return
 	}
 	territory := c.PostForm("territory")
 	if territory == "" {
-		c.JSON(http.StatusBadRequest, client.NewResponse(response.CODE_UP_ERROR, "upload user file error", "invalid territory"))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(response.CODE_UP_ERROR, "upload user file error", "invalid territory"))
 		return
 	}
 	fpath := c.PostForm("file_path")
 	if fpath == "" {
-		c.JSON(http.StatusBadRequest, client.NewResponse(response.CODE_UP_ERROR, "upload user file error", "invalid file path"))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(response.CODE_UP_ERROR, "upload user file error", "invalid file path"))
 		return
 	}
 	filename := c.PostForm("file_name")
 	if filename == "" || len(filename) < 3 || len(filename) > 63 {
-		c.JSON(http.StatusOK, client.NewResponse(response.CODE_UP_INVALID_NAME, "upload user file error", "invalid file name"))
+		c.JSON(http.StatusOK, tsproto.NewResponse(response.CODE_UP_INVALID_NAME, "upload user file error", "invalid file name"))
 		return
 	}
 	async := c.PostForm("async") == "true"
@@ -90,22 +93,26 @@ func (h *ServerHandle) UploadLocalFile(c *gin.Context) {
 
 	src, err := os.Open(fpath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, client.NewResponse(response.CODE_UP_ERROR, "upload user file error", err.Error()))
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(response.CODE_UP_ERROR, "upload user file error", err.Error()))
 		return
 	}
 	h.uploadFile(c, src, user.Account, territory, filename, async, noProxy)
 }
 
 func (h *ServerHandle) UploadUserFileTemp(c *gin.Context) {
+	ts := time.Now()
 	acc := c.PostForm("account")
+	defer func() {
+		log.Printf("account %s upload file spent time:%v\n", acc, time.Since(ts))
+	}()
 	pubkey, err := utils.ParsingPublickey(acc)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", err.Error()))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "upload user file error", err.Error()))
 		return
 	}
 	territory := c.PostForm("territory")
 	if territory == "" {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", "bad file params"))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "upload user file error", "bad file params"))
 		return
 	}
 	async := c.PostForm("async") == "true"
@@ -114,12 +121,12 @@ func (h *ServerHandle) UploadUserFileTemp(c *gin.Context) {
 	file, err := c.FormFile("file")
 
 	if err != nil {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", err.Error()))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "upload user file error", err.Error()))
 		return
 	}
 	src, err := file.Open()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "upload user file error", err.Error()))
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "upload user file error", err.Error()))
 		return
 	}
 	h.uploadFile(c, src, pubkey, territory, file.Filename, async, noProxy)
@@ -128,17 +135,17 @@ func (h *ServerHandle) UploadUserFileTemp(c *gin.Context) {
 func (h *ServerHandle) UploadUserFile(c *gin.Context) {
 	value, ok := c.Get("user")
 	if !ok {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", "bad user info"))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "upload user file error", "bad user info"))
 		return
 	}
 	user, ok := value.(auth.UserInfo)
 	if !ok || user.Account == nil {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", "bad user info"))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "upload user file error", "bad user info"))
 		return
 	}
 	territory := c.PostForm("territory")
 	if territory == "" {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", "bad file params"))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "upload user file error", "bad file params"))
 		return
 	}
 	async := c.PostForm("async") == "true"
@@ -147,12 +154,12 @@ func (h *ServerHandle) UploadUserFile(c *gin.Context) {
 	file, err := c.FormFile("file")
 
 	if err != nil {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", err.Error()))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "upload user file error", err.Error()))
 		return
 	}
 	src, err := file.Open()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "upload user file error", err.Error()))
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "upload user file error", err.Error()))
 		return
 	}
 	h.uploadFile(c, src, user.Account, territory, file.Filename, async, noProxy)
@@ -165,18 +172,18 @@ func (h *ServerHandle) uploadFile(c *gin.Context, file io.Reader, acc []byte, te
 	tmpName := hex.EncodeToString(utils.CalcSha256Hash(acc, []byte(territory+filename)))
 	fpath, err := h.buffer.NewBufPath(tmpName)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, client.NewResponse(response.CODE_UP_ERROR, "upload file error", err.Error()))
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(response.CODE_UP_ERROR, "upload file error", err.Error()))
 		return
 	}
 	err = h.SaveDataToBuf(file, fpath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, client.NewResponse(response.CODE_UP_ERROR, "upload  file error", err.Error()))
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(response.CODE_UP_ERROR, "upload  file error", err.Error()))
 		return
 	}
 	st := time.Now()
 	finfo, err := h.gateway.ProcessFile(h.buffer, filename, fpath, territory, acc)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, client.NewResponse(response.CODE_UP_ERROR, "upload file error", err.Error()))
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(response.CODE_UP_ERROR, "upload file error", err.Error()))
 		return
 	}
 	logger.GetLogger(config.LOG_GATEWAY).Infof("file %s process time: %v", finfo.Fid, time.Since(st))
@@ -184,29 +191,29 @@ func (h *ServerHandle) uploadFile(c *gin.Context, file io.Reader, acc []byte, te
 
 	cachePath, err := h.gateway.FileCacher.NewBufPath(finfo.Fid)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, client.NewResponse(response.CODE_UP_ERROR, "upload file error", err.Error()))
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(response.CODE_UP_ERROR, "upload file error", err.Error()))
 		return
 	}
 	err = os.Rename(fpath, cachePath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, client.NewResponse(response.CODE_UP_ERROR, "upload file error", err.Error()))
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(response.CODE_UP_ERROR, "upload file error", err.Error()))
 		return
 	}
 	h.gateway.FileCacher.AddData(finfo.Fid, buffer.CatNamePath(filename, cachePath))
 	if !async {
 		err = h.gateway.ProvideFile(context.Background(), h.buffer, time.Hour, finfo, false)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, client.NewResponse(response.CODE_UP_ERROR, "upload file error", err.Error()))
+			c.JSON(http.StatusInternalServerError, tsproto.NewResponse(response.CODE_UP_ERROR, "upload file error", err.Error()))
 			return
 		}
 		logger.GetLogger(config.LOG_GATEWAY).Infof("file %s create order time: %v", finfo.Fid, time.Since(st))
-		c.JSON(http.StatusOK, client.NewResponse(http.StatusOK, "success", finfo.Fid))
+		c.JSON(http.StatusOK, tsproto.NewResponse(http.StatusOK, "success", finfo.Fid))
 		return
 	}
 	client.PutData(h.partRecord, config.DB_FINFO_PREFIX+finfo.Fid, task.AsyncFinfoBox{Info: finfo, NonProxy: noProxy})
 	//Precondition Check
 	resp := h.CheckPreconditions(finfo.Fid, territory, acc, finfo.FileSize)
-
+	logger.GetLogger(config.LOG_GATEWAY).Infof("file %s check preconditions time: %v", finfo.Fid, time.Since(st))
 	if resp.Code == response.CODE_UP_ERROR {
 		c.JSON(http.StatusInternalServerError, resp)
 		return
@@ -214,7 +221,7 @@ func (h *ServerHandle) uploadFile(c *gin.Context, file io.Reader, acc []byte, te
 		c.JSON(http.StatusOK, resp)
 		return
 	}
-	c.JSON(http.StatusOK, client.NewResponse(http.StatusOK, "success", finfo))
+	c.JSON(http.StatusOK, tsproto.NewResponse(http.StatusOK, "success", finfo))
 }
 
 func (h *ServerHandle) CheckPreconditions(fid, territory string, acc []byte, size int64) response.Response {
@@ -227,9 +234,12 @@ func (h *ServerHandle) CheckPreconditions(fid, territory string, acc []byte, siz
 	if err != nil {
 		return response.NewResp(response.CODE_UP_ERROR, err.Error(), fid)
 	}
-	key := cli.GetKeyInOrder()
-	cli.PutKey(key.Address)
-	self, err := types.NewAccountID(key.PublicKey)
+	if len(h.ossPubkey) <= 0 {
+		key := cli.GetKeyInOrder()
+		h.ossPubkey = key.PublicKey
+		cli.PutKey(key.Address)
+	}
+	self, err := types.NewAccountID(h.ossPubkey)
 	if err != nil {
 		return response.NewResp(response.CODE_UP_ERROR, err.Error(), fid)
 	}
@@ -247,7 +257,7 @@ func (h *ServerHandle) CheckPreconditions(fid, territory string, acc []byte, siz
 	if err != nil {
 		return response.NewResp(response.CODE_UP_ERROR, err.Error(), fid)
 	}
-	if tinfo.State != 0 || tinfo.RemainingSpace.Int64() < size {
+	if tinfo.State != chain.TERRITORY_ACTIVE || tinfo.RemainingSpace.Int64() < size {
 		return response.NewResp(response.CODE_UP_INSUFF_SPACE, "Insufficient territory space or not activated", fid)
 	}
 
@@ -270,50 +280,50 @@ func (h *ServerHandle) UploadFileParts(c *gin.Context) {
 	noProxy := c.PostForm("noProxy") == "true"
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "parts upload error", err.Error()))
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "parts upload error", err.Error()))
 		return
 	}
 	if partId == "" || shadowHash == "" {
-		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "parts upload error", "bad params"))
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "parts upload error", "bad params"))
 		return
 	}
 	value, ok := c.Get("user")
 	if !ok {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "parts upload error", "bad user info"))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "parts upload error", "bad user info"))
 		return
 	}
 	user, ok := value.(auth.UserInfo)
 	if !ok || user.Account == nil {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "parts upload error", "bad user info"))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "parts upload error", "bad user info"))
 		return
 	}
 	idx, err := strconv.Atoi(partId)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "parts upload error", err.Error()))
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "parts upload error", err.Error()))
 		return
 	}
 	fkey := hex.EncodeToString(utils.CalcSha256Hash(user.Account, []byte(shadowHash), []byte(partId)))
 	fpath, err := h.buffer.NewBufPath(hex.EncodeToString(user.Account), shadowHash, fkey)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "parts upload error", err.Error()))
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "parts upload error", err.Error()))
 		return
 	}
 	err = h.SaveFileToBuf(file, fpath)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "parts upload error", err.Error()))
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "parts upload error", err.Error()))
 		return
 	}
 	h.buffer.AddData(fkey, fpath)
 	v, ok := h.filepartMap.Load(shadowHash)
 	if !ok {
 		h.buffer.RemoveData(fpath)
-		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "parts upload error", "no parts record"))
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "parts upload error", "no parts record"))
 		return
 	}
 	lock, ok := v.(*sync.Mutex)
 	if !ok {
 		h.buffer.RemoveData(fpath)
-		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "parts upload error", "parse key locker error"))
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "parts upload error", "parse key locker error"))
 		return
 	}
 	lock.Lock()
@@ -322,17 +332,17 @@ func (h *ServerHandle) UploadFileParts(c *gin.Context) {
 	err = client.GetData(h.partRecord, config.DB_FILEPART_PREFIX+shadowHash, &partsInfo)
 	if err != nil {
 		h.buffer.RemoveData(fpath)
-		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "parts upload error", err.Error()))
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "parts upload error", err.Error()))
 		return
 	}
 	if idx >= len(partsInfo.Parts) || idx < 0 {
 		h.buffer.RemoveData(fpath)
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "parts upload error", "bad file index"))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "parts upload error", "bad file index"))
 		return
 	}
 	if !bytes.Equal(partsInfo.Owner, user.Account) {
 		h.buffer.RemoveData(fpath)
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "parts upload error", "file owner mismatch"))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "parts upload error", "file owner mismatch"))
 		return
 	}
 	partsInfo.Parts[idx] = file.Filename
@@ -341,10 +351,10 @@ func (h *ServerHandle) UploadFileParts(c *gin.Context) {
 		err = client.PutData(h.partRecord, config.DB_FILEPART_PREFIX+shadowHash, partsInfo)
 		if err != nil {
 			h.buffer.RemoveData(fpath)
-			c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "parts upload error", err.Error()))
+			c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "parts upload error", err.Error()))
 			return
 		}
-		c.JSON(http.StatusOK, client.NewResponse(http.StatusOK, "success", partId))
+		c.JSON(http.StatusOK, tsproto.NewResponse(http.StatusOK, "success", partId))
 		return
 	}
 	//combine files
@@ -352,13 +362,13 @@ func (h *ServerHandle) UploadFileParts(c *gin.Context) {
 	cfile, err := h.CombineFileParts(partsInfo)
 	if err != nil {
 		h.buffer.RemoveData(fpath)
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "parts upload error", err.Error()))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "parts upload error", err.Error()))
 		return
 	}
 	f, err := os.Open(cfile)
 	if err != nil {
 		h.buffer.RemoveData(fpath)
-		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "parts upload error", err.Error()))
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "parts upload error", err.Error()))
 		return
 	}
 	fname := partsInfo.FileName
@@ -375,26 +385,26 @@ func (h *ServerHandle) RequestPartsUpload(c *gin.Context) {
 	)
 
 	if err := c.BindJSON(&partsInfo); err != nil {
-		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "request parts upload error", err.Error()))
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "request parts upload error", err.Error()))
 		return
 	}
 	if partsInfo.FileName == "" || partsInfo.ShadowHash == "" || partsInfo.Territory == "" ||
 		partsInfo.TotalParts <= 0 || partsInfo.TotalSize <= 0 {
-		c.JSON(http.StatusInternalServerError, client.NewResponse(http.StatusInternalServerError, "request parts upload error", "bad request params"))
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "request parts upload error", "bad request params"))
 		return
 	}
 	value, ok := c.Get("user")
 	if !ok {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "request parts upload error", "bad user info"))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "request parts upload error", "bad user info"))
 		return
 	}
 	user, ok := value.(auth.UserInfo)
 	if !ok || user.Account == nil {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "request parts upload error", "bad user info"))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "request parts upload error", "bad user info"))
 		return
 	}
 	if _, ok := h.filepartMap.LoadOrStore(partsInfo.ShadowHash, &sync.Mutex{}); ok {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "request parts upload error", "file part is uploading"))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "request parts upload error", "file part is uploading"))
 		return
 	}
 	partsInfo.Owner = user.Account
@@ -402,10 +412,10 @@ func (h *ServerHandle) RequestPartsUpload(c *gin.Context) {
 	partsInfo.Parts = make([]string, partsInfo.TotalParts)
 	err = client.PutData(h.partRecord, config.DB_FILEPART_PREFIX+partsInfo.ShadowHash, partsInfo)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "upload user file error", err.Error()))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "upload user file error", err.Error()))
 		return
 	}
-	c.JSON(http.StatusOK, client.NewResponse(http.StatusOK, "success", nil))
+	c.JSON(http.StatusOK, tsproto.NewResponse(http.StatusOK, "success", nil))
 }
 
 func (h *ServerHandle) CombineFileParts(info PartsInfo) (string, error) {

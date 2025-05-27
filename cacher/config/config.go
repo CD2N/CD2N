@@ -125,17 +125,18 @@ func InitDefaultConfig(path string) error {
 		conf.TokenAccSign != "" && conf.SecretKey == "" {
 		return errors.Wrap(errors.New("secret key is empty"), "init default config error")
 	}
-	if conf.SecretKey != "" {
-		return nil
-	}
 	if conf.Network == 0 {
 		conf.Network = utils.TESTNET_FORMAT
+	}
+	if conf.SecretKey != "" {
+		return nil
 	}
 	key, err := crypto.GenerateKey()
 	if err != nil {
 		return errors.Wrap(err, "init default config error")
 	}
 	conf.SecretKey = hex.EncodeToString(key.D.Bytes())
+	log.Println(conf.SecretKey)
 	return nil
 }
 

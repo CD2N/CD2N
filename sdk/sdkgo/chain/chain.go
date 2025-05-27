@@ -78,7 +78,7 @@ func NewClient(opts ...Option) (*Client, error) {
 			return client, errors.Wrap(err, "new cess chain client error")
 		}
 	}
-	err := client.NewSubstrateAPI()
+	err := client.RefreshSubstrateApi(true)
 	if err != nil {
 		return client, errors.Wrap(err, "new cess chain client error")
 	}
@@ -118,20 +118,33 @@ func (c *Client) ParseSystemEventError(t types.ModuleError) error {
 	return errors.Wrap(fmt.Errorf("%s: %s", e.Name, e.Value), "extrinsic failed")
 }
 
-func (c *Client) NewSubstrateAPI() error {
+func (c *Client) NewSubstrateAPI(rpcAddr string) error {
 	var err error
-	if len(c.Rpcs) <= 0 {
-		return errors.New("Invalid RPC address")
+	if rpcAddr != "" {
+		c.SubstrateAPI, err = rpc.NewSubstrateAPI(rpcAddr)
+	} else {
+		if len(c.Rpcs) <= 0 {
+			return errors.New("Invalid RPC address")
+		}
+		url := c.Rpcs[rand.Intn(len(c.Rpcs))]
+		c.SubstrateAPI, err = rpc.NewSubstrateAPI(url)
 	}
-	url := c.Rpcs[rand.Intn(len(c.Rpcs))]
-	c.SubstrateAPI, err = rpc.NewSubstrateAPI(url)
 	return err
 }
 
-func (c *Client) RefreshSubstrateApi() error {
+func (c *Client) RefreshSubstrateApi(r bool) error {
 	var err error
-	for i := 0; i < 3; i++ {
-		if err = c.NewSubstrateAPI(); err == nil {
+	count, lens := 1, len(c.Rpcs)
+	for r && count >= lens {
+		i, j := rand.Intn(lens), rand.Intn(lens)
+		if i == j {
+			continue
+		}
+		c.Rpcs[i], c.Rpcs[j] = c.Rpcs[j], c.Rpcs[i]
+		count++
+	}
+	for _, rpc := range c.Rpcs {
+		if err = c.NewSubstrateAPI(rpc); err == nil {
 			c.Metadata, err = c.RPC.State.GetMetadataLatest()
 			if err != nil {
 				continue

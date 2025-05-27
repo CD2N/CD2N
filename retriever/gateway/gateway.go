@@ -4,22 +4,19 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"fmt"
 	"net/url"
 	"os"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/CD2N/CD2N/retriever/config"
-	"github.com/CD2N/CD2N/retriever/libs/client"
 	"github.com/CD2N/CD2N/retriever/libs/task"
 	"github.com/CD2N/CD2N/retriever/utils"
 	"github.com/CD2N/CD2N/sdk/sdkgo/chain"
 	"github.com/CD2N/CD2N/sdk/sdkgo/chain/evm"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
-	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
+	"github.com/CD2N/CD2N/sdk/sdkgo/libs/tsproto"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/go-redis/redis/v8"
@@ -41,7 +38,7 @@ type DataRecord struct {
 }
 
 type Cd2nNode struct {
-	client.Cd2nNode
+	tsproto.Cd2nNode
 	SendBytes    uint64 `json:"send_bytes"`
 	ReceiveBytes uint64 `json:"receive_bytes"`
 	SuccessCount uint64 `json:"success_count"`
@@ -53,7 +50,6 @@ type Gateway struct {
 	redisCli   *redis.Client
 	cessCli    *chain.Client
 	taskRecord *leveldb.DB
-	nodes      *sync.Map
 	pool       *ants.Pool
 	pstats     *task.ProvideStat
 	contract   *evm.CacheProtoContract
@@ -70,7 +66,6 @@ func NewGateway(redisCli *redis.Client, contract *evm.CacheProtoContract, cacher
 	gateway := &Gateway{
 		redisCli:   redisCli,
 		taskRecord: taskRec,
-		nodes:      &sync.Map{},
 		contract:   contract,
 		pstats: &task.ProvideStat{
 			Ongoing: &atomic.Int64{},
@@ -106,93 +101,15 @@ func (g *Gateway) GatewayStatus() Status {
 	}
 }
 
-func (g *Gateway) LoadOssNodes() error {
-	var err error
-	conf := config.GetConfig()
-	cli, err := g.GetCessClient()
-	if err != nil {
-		return errors.Wrap(err, "load oss nodes error")
-	}
-	osses, err := cli.QueryAllOss(0)
-	if err != nil {
-		return errors.Wrap(err, "load oss nodes error")
-	}
-	for _, oss := range osses {
-
-		node := Cd2nNode{
-			Cd2nNode: client.Cd2nNode{
-				EndPoint: string(oss.Domain),
-			},
-		}
-
-		if node.EndPoint == "" || conf.Endpoint == node.EndPoint {
-			continue
-		}
-		if !strings.Contains(node.EndPoint, "http://") && strings.Contains(node.EndPoint, "https://") {
-			node.EndPoint = fmt.Sprintf("https://%s", node.EndPoint)
-		}
-		data, err := client.CheckCdnNodeAvailable(node.EndPoint)
-		if err != nil {
-			//logger.GetLogger(config.LOG_GATEWAY).Error("query cdn node info error ", err.Error())
-			continue
-		}
-		if data.WorkAddr == "" {
-			data.WorkAddr = hex.EncodeToString(oss.Domain)
-		}
-		node.PoolId = data.PoolId
-		node.IsGateway = data.IsGateway
-		g.nodes.LoadOrStore(data.WorkAddr, node)
-		logger.GetLogger(config.LOG_GATEWAY).Info("find a peer retrieval node ", node)
-	}
-	return errors.Wrap(err, "load oss nodes error")
-}
-
-func (g *Gateway) LoadCdnNodes() error {
-	var (
-		index int64
-		addr  common.Address
-		err   error
-	)
-	for {
-		addr, err = g.contract.QueryCdnL1NodeByIndex(index)
-		if err != nil {
-			break
-		}
-		index++
-		info, err := g.contract.QueryRegisterInfo(addr)
-		if err != nil {
-			logger.GetLogger(config.LOG_GATEWAY).Error("query cdn node info error ", err.Error())
-			continue
-		}
-		node := Cd2nNode{
-			Cd2nNode: client.Cd2nNode{
-				WorkAddr:  addr.Hex(),
-				TeeAddr:   info.TeeEth.Hex(),
-				TeePubkey: info.TeeCess,
-				EndPoint:  info.Endpoint,
-			},
-		}
-		data, err := client.CheckCdnNodeAvailable(node.EndPoint)
-		if err != nil {
-			logger.GetLogger(config.LOG_GATEWAY).Error("query cdn node info error ", err.Error())
-			continue
-		}
-		node.PoolId = data.PoolId
-		node.IsGateway = data.IsGateway
-		g.nodes.LoadOrStore(addr.Hex(), node)
-	}
-	return errors.Wrap(err, "load cdn nodes error")
-}
-
 func (g *Gateway) CheckAndCreateOrder(ctx context.Context, node Cd2nNode, traffic string) error {
 	if config.GetConfig().Debug {
 		return nil
 	}
-	u, err := url.JoinPath(node.EndPoint, client.QUERY_CAPACITY_URL)
+	u, err := url.JoinPath(node.EndPoint, tsproto.QUERY_CAPACITY_URL)
 	if err != nil {
 		return errors.Wrap(err, "check and create order error")
 	}
-	cap, err := client.QueryRemainCap(u, g.contract.Node.Hex())
+	cap, err := tsproto.QueryRemainCap(u, g.contract.Node.Hex())
 	if err != nil {
 		return errors.Wrap(err, "check and create order error")
 	}
@@ -339,9 +256,6 @@ func (g *Gateway) ProcessFile(buf *buffer.FileBuffer, name, fpath, territory str
 		}); err != nil {
 			return task.FileInfo{}, errors.Wrap(err, "process file error")
 		}
-		if err = g.SaveDataInfo(segment, fragments); err != nil {
-			logger.GetLogger(config.LOG_GATEWAY).Error(err)
-		}
 		finfo.Fragments = append(finfo.Fragments, fragments)
 	}
 	hash.Reset()
@@ -416,19 +330,6 @@ func (g *Gateway) CreateFlashStorageOrder(owner []byte, fid, filename, territory
 		return hash, errors.Wrap(err, "create flash storage order error")
 	}
 	return hash, nil
-}
-
-func (g *Gateway) UpdateNodesLedger(key string, sendBytes int64) {
-	n, ok := g.nodes.Load(key)
-	if !ok {
-		return
-	}
-	node, ok := n.(Cd2nNode)
-	if !ok {
-		return
-	}
-	node.SendBytes += uint64(sendBytes)
-	g.nodes.Store(key, node)
 }
 
 func getFileHash(fid string) chain.FileHash {

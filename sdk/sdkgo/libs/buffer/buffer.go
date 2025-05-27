@@ -105,10 +105,10 @@ func (b *FileBuffer) GetData(key string) cache.Item {
 }
 
 func (b *FileBuffer) RemoveData(fpath string) error {
+	b.cacher.RemoveItem(filepath.Base(fpath))
 	if err := os.Remove(fpath); err != nil {
 		return errors.Wrap(err, "remove file buffer error")
 	}
-	b.cacher.RemoveItem(filepath.Base(fpath))
 	b.unserialized.Add(1)
 	if b.unserialized.Load() >= SERIALIZED_LIMIT || time.Since(b.updateAt.Load().(time.Time)) >= UPDATE_TIME {
 		b.updateAt.Store(time.Now())

@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/CD2N/CD2N/retriever/config"
-	"github.com/CD2N/CD2N/retriever/libs/client"
 	"github.com/CD2N/CD2N/retriever/server/auth"
 	"github.com/CD2N/CD2N/retriever/server/handles"
+	"github.com/CD2N/CD2N/sdk/sdkgo/libs/tsproto"
 	"github.com/gin-gonic/gin"
 )
 
@@ -18,7 +18,7 @@ func NewRouter() *gin.Engine {
 	router.Use(Cors())
 	router.Use(TrimGetSuffix())
 	router.Use(gin.CustomRecovery(func(c *gin.Context, err any) {
-		errResp := client.NewResponse(http.StatusInternalServerError, "internal server error", err)
+		errResp := tsproto.NewResponse(http.StatusInternalServerError, "internal server error", err)
 		c.JSON(http.StatusInternalServerError, errResp)
 		c.Abort()
 	}))
@@ -55,7 +55,7 @@ func TokenVerify(c *gin.Context) {
 	}
 	clams, err := parseToken(c)
 	if err != nil {
-		resp := client.NewResponse(http.StatusForbidden, "Invalid token", err.Error())
+		resp := tsproto.NewResponse(http.StatusForbidden, "Invalid token", err.Error())
 		c.JSON(resp.Code, resp)
 		c.Abort()
 		return
@@ -113,7 +113,8 @@ func RegisterHandles(router *gin.Engine, h *handles.ServerHandle) {
 	router.POST("/upfile", h.UploadUserFileTemp)
 	router.GET("/capacity/:addr", h.QueryCacheCap)
 	router.GET("/querydata/:did", h.QueryData)
-	router.POST("/cache-fetch", h.FetchCacheData)
+
+	router.POST("/cache-fetch", h.Ac.RetrieveLimitMiddleware(), h.FetchCacheData)
 	router.POST("/provide", h.ProvideData)
 	conf := config.GetConfig()
 	if !conf.LaunchGateway {
@@ -125,7 +126,6 @@ func RegisterHandles(router *gin.Engine, h *handles.ServerHandle) {
 	gateway := router.Group("/gateway")
 	gateway.Use(TokenVerify)
 	gateway.POST("/gentoken", h.GenToken)
-	gateway.GET("/getinfo/:segment", h.GetDataInfo)
 	gateway.HEAD("/download/:fid/:segment", h.DownloadUserFile)
 	gateway.GET("/download/:fid", h.DownloadUserFile)
 	gateway.GET("/download/:fid/:segment", h.DownloadUserFile)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/CD2N/CD2N/retriever/utils"
 	"github.com/CD2N/CD2N/sdk/sdkgo/chain"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
+	"github.com/CD2N/CD2N/sdk/sdkgo/libs/tsproto"
 	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
 	"github.com/CD2N/CD2N/sdk/sdkgo/retriever"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -98,7 +100,7 @@ func (g *Gateway) ProvideFile(ctx context.Context, buffer *buffer.FileBuffer, ex
 	return nil
 }
 
-func (g *Gateway) ClaimFile(ctx context.Context, req FileRequest) (FileResponse, error) {
+func (g *Gateway) ClaimFile(ctx context.Context, req tsproto.FileRequest) (FileResponse, error) {
 	var resp FileResponse
 	sign, err := hex.DecodeString(req.Sign)
 	if err != nil {
@@ -311,6 +313,7 @@ func RemoveSubTaskFiles(buffer *buffer.FileBuffer, groupId int, ftask task.Provi
 	for i := range ftask.Fragments {
 		err := buffer.RemoveData(filepath.Join(ftask.BaseDir, ftask.Fragments[i][groupId]))
 		if err != nil {
+			log.Println("[Remove Subtask]", err)
 			return err
 		}
 	}
@@ -340,7 +343,9 @@ func TaskGc(buffer *buffer.FileBuffer, ftask task.ProvideTask) {
 	for i := range ftask.Fragments {
 		for j := range ftask.Fragments[i] {
 			fpath := filepath.Join(ftask.BaseDir, ftask.Fragments[i][j])
-			buffer.RemoveData(fpath)
+			if err := buffer.RemoveData(fpath); err != nil {
+				log.Println("[Task GC]", err)
+			}
 		}
 	}
 	if entries, err := os.ReadDir(ftask.BaseDir); err != nil || len(entries) == 0 {
