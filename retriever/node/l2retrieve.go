@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"net/url"
 	"path/filepath"
 	"time"
 
@@ -11,23 +12,29 @@ import (
 	"github.com/CD2N/CD2N/retriever/libs/client"
 	"github.com/CD2N/CD2N/retriever/libs/task"
 	"github.com/CD2N/CD2N/retriever/utils"
+	"github.com/CD2N/CD2N/sdk/sdkgo/libs/tsproto"
 	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
-	"github.com/ipfs/go-cid"
 	"github.com/pkg/errors"
 )
 
-func (mg *Manager) GetDataCid(dataId string) (string, error) {
-	c, err := cid.Decode(dataId)
-	if err == nil {
-		return c.String(), nil
-	}
-	var CID string
-	err = client.GetData(mg.cidRecord, dataId, &CID)
-	if err != nil {
-		return "", errors.Wrap(err, "get data cid error")
-	}
-	return CID, nil
+type L2Retriever interface {
+	GetRetrieveTask(ctx context.Context, tid string) (task.RetrieveTask, error)
+	ReceiveData(ctx context.Context, tid, provider, fpath string, pubkey []byte) error
+	RetrieveDataFromL2(ctx context.Context, reqId, extdata, user string, exp time.Duration, did string, sign []byte) (string, error)
 }
+
+// func (mg *Manager) GetDataCid(dataId string) (string, error) {
+// 	c, err := cid.Decode(dataId)
+// 	if err == nil {
+// 		return c.String(), nil
+// 	}
+// 	var CID string
+// 	err = client.GetData(mg.cidRecord, dataId, &CID)
+// 	if err != nil {
+// 		return "", errors.Wrap(err, "get data cid error")
+// 	}
+// 	return CID, nil
+// }
 
 func (mg *Manager) GetRetrieveTask(ctx context.Context, tid string) (task.RetrieveTask, error) {
 	var rtask task.RetrieveTask
@@ -40,18 +47,6 @@ func (mg *Manager) GetRetrieveTask(ctx context.Context, tid string) (task.Retrie
 		return rtask, errors.Wrap(err, "get retrieve task error")
 	}
 	return rtask, nil
-}
-
-func (mg *Manager) CalcDataCid(did, fpath string) (string, error) {
-	cid, err := client.ComputeCid(fpath, client.CID_V0)
-	if err != nil {
-		return cid, errors.Wrap(err, "calc data cid error")
-	}
-	err = client.PutData(mg.cidRecord, did, cid)
-	if err != nil {
-		return cid, errors.Wrap(err, "calc data cid error")
-	}
-	return cid, nil
 }
 
 func (mg *Manager) RetrieveData(ctx context.Context, did, requester, reqId, extdata string, exp time.Duration, sign []byte) (string, error) {
@@ -150,35 +145,44 @@ func NewRetrieveTask(did, reqer, acc, reqId, extdata string, exp int64, sign []b
 	}
 }
 
-func (mg *Manager) RetrieveDataService(ctx context.Context, teeUrl, user, reqId, extdata string, exp time.Duration, did string, sign []byte) (string, error) {
-	cid, err := mg.GetDataCid(did)
+//u, err := url.JoinPath(h.teeEndpoint, client.AUDIT_DATA_URL)
+
+func (mg *Manager) RetrieveDataFromL2(ctx context.Context, reqId, extdata, user string, exp time.Duration, did string, sign []byte) (string, error) {
+
+	u, err := url.JoinPath(mg.teeEndpoint, tsproto.AUDIT_DATA_URL)
 	if err != nil {
-		return "", errors.Wrap(err, "retrieve data service error")
+		return "", errors.Wrap(err, "retrieve data from l2 cache network error")
 	}
-	tid, err := mg.RetrieveData(ctx, did, user, reqId, extdata, exp, sign)
+
+	tid, err := mg.RetrieveData(ctx, did, mg.nodeAddr, reqId, extdata, exp, sign)
 	if err != nil {
-		return "", errors.Wrap(err, "retrieve data service error")
+		return "", errors.Wrap(err, "retrieve data from l2 cache network error")
 	}
 	task, err := mg.GetRetrieveTask(ctx, tid)
 	if err != nil {
-		return "", errors.Wrap(err, "retrieve data service error")
+		return "", errors.Wrap(err, "retrieve data from l2 cache network error")
 	}
-	rpath, err := mg.databuf.NewBufPath(cid)
+	rpath, err := mg.databuf.NewBufPath(tid)
 	if err != nil {
-		return "", errors.Wrap(err, "retrieve data service error")
+		return "", errors.Wrap(err, "retrieve data from l2 cache network error")
+	}
+	if user == "" {
+		user = utils.Remove0x(mg.nodeAddr)
+	} else {
+		user = utils.Remove0x(user)
 	}
 	if task.Pubkey != nil {
 		tidBytes, _ := hex.DecodeString(tid)
-		if err = client.AuditData(teeUrl, task.DataPath, rpath, client.TeeReq{
-			Cid:         cid,
-			UserAcc:     utils.Remove0x(user),
+		if err = tsproto.AuditData(u, task.DataPath, rpath, tsproto.TeeReq{
+			Cid:         did,
+			UserAcc:     user,
 			Key:         task.Pubkey,
 			Nonce:       tidBytes,
 			RequestId:   reqId,
 			UserSign:    sign,
 			SupplierAcc: task.Provider,
 		}); err != nil {
-			return "", errors.Wrap(err, "retrieve data service error")
+			return "", errors.Wrap(err, "retrieve data from l2 cache network error")
 		}
 	} else {
 		rpath = task.DataPath

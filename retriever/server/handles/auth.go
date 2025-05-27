@@ -3,14 +3,15 @@ package handles
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/CD2N/CD2N/retriever/libs/client"
 	"github.com/CD2N/CD2N/retriever/server/auth"
 	"github.com/CD2N/CD2N/retriever/utils"
+	"github.com/CD2N/CD2N/sdk/sdkgo/libs/tsproto"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
@@ -23,40 +24,42 @@ const (
 )
 
 func (h *ServerHandle) GenToken(c *gin.Context) {
+	ts := time.Now()
 	acc := c.PostForm("account")
 	msg := c.PostForm("message")
 	sign := c.PostForm("sign")
 	if acc == "" || msg == "" || sign == "" {
-		resp := client.NewResponse(http.StatusBadRequest, "login error", "bad request params")
+		resp := tsproto.NewResponse(http.StatusBadRequest, "login error", "bad request params")
 		c.JSON(resp.Code, resp)
 		return
 	}
 	//check message
 	unix, err := strconv.ParseInt(msg, 10, 64)
 	if err != nil {
-		resp := client.NewResponse(http.StatusInternalServerError, "login error", "The timestamp format is incorrect")
+		resp := tsproto.NewResponse(http.StatusInternalServerError, "login error", "The timestamp format is incorrect")
 		c.JSON(resp.Code, resp)
 		return
 	}
 	if time.Duration(time.Now().Unix()-unix) > time.Minute {
-		resp := client.NewResponse(http.StatusBadRequest, "login error", "invalid timestamp")
+		resp := tsproto.NewResponse(http.StatusBadRequest, "login error", "invalid timestamp")
 		c.JSON(resp.Code, resp)
 		return
 	}
 	account, err := ParsingAndVerifyPublickey(acc, msg, sign)
 	if err != nil {
-		resp := client.NewResponse(http.StatusBadRequest, "login error", err.Error())
+		resp := tsproto.NewResponse(http.StatusBadRequest, "login error", err.Error())
 		c.JSON(resp.Code, resp)
 		return
 	}
 	token, err := auth.Jwth().GenerateToken(auth.UserInfo{Account: account})
 	if err != nil {
-		resp := client.NewResponse(http.StatusInternalServerError, "login error", err.Error())
+		resp := tsproto.NewResponse(http.StatusInternalServerError, "login error", err.Error())
 		c.JSON(resp.Code, resp)
 		return
 	}
-	resp := client.NewResponse(http.StatusOK, "success", token)
+	resp := tsproto.NewResponse(http.StatusOK, "success", token)
 	c.JSON(resp.Code, resp)
+	log.Printf("account %s get token spent time:%v\n",acc,time.Since(ts))
 }
 
 func ParsingAndVerifyPublickey(acc, message, sign string) ([]byte, error) {

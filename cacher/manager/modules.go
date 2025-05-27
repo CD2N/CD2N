@@ -2,6 +2,7 @@ package manager
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"strings"
 	"sync"
@@ -11,13 +12,23 @@ import (
 	"github.com/CD2N/CD2N/cacher/utils"
 	"github.com/CD2N/CD2N/sdk/sdkgo/chain"
 	"github.com/CD2N/CD2N/sdk/sdkgo/chain/evm"
+	"github.com/CD2N/CD2N/sdk/sdkgo/libs/tsproto"
 	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/signature"
+	ecies "github.com/ecies/go/v2"
 	"github.com/go-redis/redis/v8"
 	"github.com/pkg/errors"
 )
 
-type Storage struct {
+type RetrieverProvider interface {
+	GetRetriever(key string) (Retriever, bool)
+	RangeRetriever(f func(key string, node Retriever) bool)
+}
+
+// type StoragerProvider interface {
+// }
+
+type Storager struct {
 	Account    string `json:"account"`
 	TotalSpace uint64 `json:"total_space"`
 	UsedSpace  uint64 `json:"used_space"`
@@ -25,7 +36,7 @@ type Storage struct {
 	Available  bool   `json:"available"`
 }
 
-func (n *Storage) IsAvailable() bool {
+func (n *Storager) IsAvailable() bool {
 	return n.Available
 }
 
@@ -47,7 +58,7 @@ func (n *Retriever) IsAvailable() bool {
 
 type StoragersManager struct {
 	lock      *sync.RWMutex
-	storagers []Storage
+	storagers []Storager
 	smap      map[string]int
 	index     int
 }
@@ -59,7 +70,7 @@ func NewStoragersManager() *StoragersManager {
 	}
 }
 
-func (sm *StoragersManager) GetStorager(minerAcc string) (Storage, bool) {
+func (sm *StoragersManager) GetStorager(minerAcc string) (Storager, bool) {
 	sm.lock.RLock()
 	defer sm.lock.RUnlock()
 	if idx, ok := sm.smap[minerAcc]; ok {
@@ -72,13 +83,26 @@ func (sm *StoragersManager) GetStorager(minerAcc string) (Storage, bool) {
 			return storager, true
 		}
 	}
-	return Storage{}, false
+	return Storager{}, false
 }
 
-func (sm *StoragersManager) GetMinerEndpoint(dCount uint64) (Endpoint, error) {
+func (sm *StoragersManager) ExportStorages() []tsproto.StorageNode {
+	sm.lock.RLock()
+	defer sm.lock.RUnlock()
+	storagers := make([]tsproto.StorageNode, 0, len(sm.storagers))
+	for _, storager := range sm.storagers {
+		storagers = append(storagers, tsproto.StorageNode{
+			Account:  storager.Account,
+			Endpoint: storager.Endpoint,
+		})
+	}
+	return storagers
+}
+
+func (sm *StoragersManager) GetMinerEndpoint(dCount uint64) (tsproto.StorageNode, error) {
 	sm.lock.Lock()
 	defer sm.lock.Unlock()
-	var ep Endpoint
+	var ep tsproto.StorageNode
 	if len(sm.storagers) == 0 {
 		return ep, errors.Wrap(errors.New("no nodes available"), "get miner endpoint error")
 	}
@@ -90,8 +114,8 @@ func (sm *StoragersManager) GetMinerEndpoint(dCount uint64) (Endpoint, error) {
 	if target.Account == "" || target.Endpoint == "" {
 		return ep, errors.Wrap(errors.New("no legal storage node"), "get miner endpoint error")
 	}
-	ep.MinerAcc = target.Account
-	ep.MinerAddr = target.Endpoint
+	ep.Account = target.Account
+	ep.Endpoint = target.Endpoint
 	logger.GetLogger(config.LOG_TASK).Infof("select miner %d,total miners %d", sm.index, len(sm.storagers))
 	sm.index = (sm.index + 1) % len(sm.storagers)
 	return ep, nil
@@ -118,7 +142,7 @@ func (sm *StoragersManager) LoadStorageNodes(conf config.Config) error {
 			logger.GetLogger(config.LOG_NODE).Error(err.Error())
 			continue
 		}
-		node := Storage{
+		node := Storager{
 			Account:  miner.Account,
 			Endpoint: miner.Endpoint,
 		}
@@ -147,7 +171,7 @@ func (sm *StoragersManager) LoadStorageNodes(conf config.Config) error {
 		if _, ok := sm.smap[acc]; ok {
 			continue
 		}
-		node := Storage{
+		node := Storager{
 			Account:  acc,
 			Endpoint: endpoint,
 		}
@@ -167,7 +191,7 @@ func (sm *StoragersManager) LoadStorageNodes(conf config.Config) error {
 }
 
 func (sm *StoragersManager) UpdateStorageNodeStatus(ctx context.Context, conf config.Config) error {
-	ticker := time.NewTicker(time.Minute * 30)
+	ticker := time.NewTicker(time.Minute * 60)
 	for {
 		select {
 		case <-ctx.Done():
@@ -260,6 +284,7 @@ func (rm *RetrieverManager) LoadRetrievers(cli *evm.CacheProtoContract, conf con
 				rm.nodes.Store(cdn.Account, node)
 			}
 		}
+		logger.GetLogger(config.LOG_NODE).Infof("load retriever %s in local config", cdn.Endpoint)
 	}
 	var index int64
 	//load retriever node on contract
@@ -281,6 +306,7 @@ func (rm *RetrieverManager) LoadRetrievers(cli *evm.CacheProtoContract, conf con
 		}
 		node.Available = CheckNodeAvailable(&node)
 		rm.nodes.LoadOrStore(node.Account, node)
+		logger.GetLogger(config.LOG_NODE).Infof("load retriever %s on contract", info.Endpoint)
 	}
 
 	//load retriever node on chain
@@ -305,6 +331,120 @@ func (rm *RetrieverManager) LoadRetrievers(cli *evm.CacheProtoContract, conf con
 		}
 		node.Available = CheckNodeAvailable(&node)
 		rm.nodes.LoadOrStore(node.Account, node)
+		logger.GetLogger(config.LOG_NODE).Infof("load oss %s on chain", oss.Domain)
 	}
 	return nil
+}
+
+func CheckNodeAvailable(node any) bool {
+	switch n := node.(type) {
+	case *Storager:
+		return tsproto.CheckStorageNodeAvailable(n.Endpoint) == nil
+	case *Retriever:
+		info, err := tsproto.CheckCdnNodeAvailable(n.Endpoint)
+		if err != nil {
+			logger.GetLogger(config.LOG_NODE).Error("check cdn node available error ", err.Error())
+			return false
+		}
+		if n.Account == "" {
+			n.Account = info.WorkAddr
+		}
+		n.TeePubkey = info.TeePubkey
+		n.IsGateway = info.IsGateway
+		n.RedisAddress = info.RedisAddr
+	}
+	return false
+}
+
+// //////////////////////////////
+
+type SignTool interface {
+	SignMsg(msg string) (string, error)
+	UpdateSign(msg string) error
+	GetSignInfoTuple() (acc, msg, sign string)
+}
+
+type CessSignTool struct {
+	message string
+	account string
+	sign    string
+	keypair signature.KeyringPair
+}
+
+func NewCessSignTool() (*CessSignTool, error) {
+	msg := utils.GetRandomcode(16)
+	mnemonic, err := utils.GenerateMnemonic()
+	if err != nil {
+		return nil, errors.Wrap(err, "new cess sign tool error")
+	}
+	keypair, err := signature.KeyringPairFromSecret(mnemonic, 0)
+	if err != nil {
+		return nil, errors.Wrap(err, "new cess sign tool error")
+	}
+
+	acc := utils.EncodePubkey(keypair.PublicKey, config.GetConfig().Network)
+
+	sign, err := utils.SignedSR25519WithMnemonic(keypair.URI, msg)
+	if err != nil {
+		return nil, errors.Wrap(err, "new file manager error")
+	}
+	return &CessSignTool{
+		message: msg,
+		account: acc,
+		sign:    hex.EncodeToString(sign),
+	}, nil
+}
+
+func (ct *CessSignTool) SignMsg(msg string) (string, error) {
+	sign, err := utils.SignedSR25519WithMnemonic(ct.keypair.URI, msg)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to sign message")
+	}
+	return hex.EncodeToString(sign), nil
+}
+
+func (ct *CessSignTool) UpdateSign(msg string) error {
+	msg, err := ct.SignMsg(msg)
+	if err != nil {
+		return errors.Wrap(err, "update sign error")
+	}
+	ct.message = msg
+	return nil
+}
+
+func (ct *CessSignTool) GetSignInfoTuple() (acc, msg, sign string) {
+	return ct.account, ct.message, ct.sign
+}
+
+///////////////////////////////////////////
+
+type AesKeyProvider interface {
+	GetAESKey(pubkey []byte) ([]byte, []byte, error)
+}
+
+type EcdhAesKeyManager struct {
+	Key  *ecies.PrivateKey
+	Date time.Time
+}
+
+func (em *EcdhAesKeyManager) GetAESKey(pubkey []byte) ([]byte, []byte, error) {
+	var err error
+
+	if em.Key == nil || time.Since(em.Date) > time.Hour*24*7 {
+		em.Key, err = ecies.GenerateKey()
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "get aes key with ECDH error")
+		}
+		em.Date = time.Now()
+	}
+	pk, err := ecies.NewPublicKeyFromBytes(pubkey)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "get aes key with ECDH error")
+	}
+
+	key, err := em.Key.ECDH(pk)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "get aes key with ECDH error")
+	}
+	return key, em.Key.PublicKey.Bytes(true), nil
 }

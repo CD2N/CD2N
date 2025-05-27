@@ -9,12 +9,9 @@ import (
 	"github.com/CD2N/CD2N/retriever/libs/task"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
 	"github.com/go-redis/redis/v8"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 type Cd2nNode interface {
-	GetDataCid(dataId string) (string, error)
-	//RetrieveLocalData(ctx context.Context, cid string) (string, error)
 	GetRetrieveTask(ctx context.Context, tid string) (task.RetrieveTask, error)
 	ReceiveData(ctx context.Context, tid, provider, fpath string, pubkey []byte) error
 	RetrieveDataService(ctx context.Context, teeUrl, user, reqId, extdata string, exp time.Duration, did string, sign []byte) (string, error)
@@ -29,8 +26,8 @@ type Status struct {
 
 type Manager struct {
 	redisCli     *redis.Client
-	cidRecord    *leveldb.DB
 	nodeAddr     string
+	teeEndpoint  string
 	databuf      *buffer.FileBuffer
 	retrieveNum  *atomic.Uint64
 	retrievedNum *atomic.Uint64
@@ -39,14 +36,13 @@ type Manager struct {
 	rw           *sync.RWMutex
 }
 
-func NewManager(redisCli *redis.Client, cidrecord *leveldb.DB, buf *buffer.FileBuffer, nodeAddr string) *Manager {
-
+func NewManager(redisCli *redis.Client, buf *buffer.FileBuffer, nodeAddr, teeEndpoint string) *Manager {
 	mg := &Manager{
 		redisCli:     redisCli,
-		cidRecord:    cidrecord,
 		rtasks:       make(map[string]chan string),
 		callbackCh:   make(chan string, task.CALLBACK_CHANNEL_SIZE),
 		nodeAddr:     nodeAddr,
+		teeEndpoint:  teeEndpoint,
 		databuf:      buf,
 		retrieveNum:  &atomic.Uint64{},
 		retrievedNum: &atomic.Uint64{},

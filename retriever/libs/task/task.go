@@ -149,14 +149,16 @@ func (kl *EasyKeyLock) RemoveLock(key string) {
 func (ps *ProvideStat) TaskDone(fid string) {
 	ps.Done.Add(1)
 	ps.Ongoing.Add(-1)
+	ps.Retried.Add(-1)
 	ps.Fids.Delete(fid)
 }
 
 func (ps *ProvideStat) TaskFlash(fid string) {
 	if _, ok := ps.Fids.LoadOrStore(fid, struct{}{}); ok {
 		ps.Retried.Add(1)
+	} else {
+		ps.Ongoing.Add(1)
 	}
-	ps.Ongoing.Add(1)
 }
 
 func (f FileInfo) String() string {

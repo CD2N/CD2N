@@ -186,3 +186,13 @@ func EncryptFile(fpath string, key, nonce []byte) (string, error) {
 	}
 	return newPath, nil
 }
+
+func MakeDir(dir string) error {
+	if _, err := os.Stat(dir); err != nil {
+		err = os.MkdirAll(dir, 0755)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}

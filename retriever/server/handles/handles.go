@@ -20,6 +20,7 @@ import (
 	"github.com/CD2N/CD2N/sdk/sdkgo/chain"
 	"github.com/CD2N/CD2N/sdk/sdkgo/chain/evm"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
+	"github.com/CD2N/CD2N/sdk/sdkgo/libs/tsproto"
 	"github.com/decred/base58"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gin-gonic/gin"
@@ -30,11 +31,15 @@ import (
 )
 
 type ServerHandle struct {
+	retr        *node.ResourceRetriever
 	node        *node.Manager
+	partners    *node.NodeManager
 	gateway     *gateway.Gateway
 	buffer      *buffer.FileBuffer
+	Ac          *AccessController
 	partRecord  *leveldb.DB
 	filepartMap *sync.Map
+	ossPubkey   []byte
 	teeEndpoint string
 	teePubkey   []byte
 	teeAddr     string
@@ -70,13 +75,13 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 
 	if !conf.Debug {
 		h.teeEndpoint = conf.TeeAddress
-		u, err := url.JoinPath(h.teeEndpoint, client.QUERY_TEE_INFO)
+		u, err := url.JoinPath(h.teeEndpoint, tsproto.QUERY_TEE_INFO)
 		if err != nil {
 			return errors.Wrap(err, "init handles runtime error")
 		}
-		var data client.TeeResp
+		var data tsproto.TeeResp
 		for i := 0; i < 5; i++ {
-			data, err = client.QueryTeeInfo(u)
+			data, err = tsproto.QueryTeeInfo(u)
 			if err == nil && data.EthAddress != "" {
 				break
 			}
@@ -115,8 +120,7 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 	// init level databases
 	log.Println("init level databases ...")
 	if err := client.RegisterLeveldbCli(
-		filepath.Join(conf.WorkSpace, config.LEVELDB_DIR),
-		config.TASKDB_NAME, config.CIDMAPDB_NAME,
+		filepath.Join(conf.WorkSpace, config.LEVELDB_DIR), config.TASKDB_NAME,
 	); err != nil {
 		return errors.Wrap(err, "init handles runtime error")
 	}
@@ -144,17 +148,21 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 	// init nodes
 	log.Println("init retriever node ...")
 	h.node = node.NewManager(
-		redisCli, client.GetLeveldbCli(config.CIDMAPDB_NAME),
-		h.buffer, contractCli.Node.Hex(),
+		redisCli, h.buffer, contractCli.Node.Hex(), h.teeEndpoint,
 	)
+	h.partners = node.NewNodeManager(contractCli)
+
+	h.retr, err = node.NewResourceRetriever(
+		256, contractCli.Node.Hex(), h.partners,
+		h.buffer, h.node, contractCli.Signature,
+	)
+
+	if err != nil {
+		return errors.Wrap(err, "init handles runtime error")
+	}
 
 	go h.node.CallbackManager(ctx)
 
-	if !conf.LaunchGateway {
-		return nil
-	}
-
-	// init gateway, if it be needed
 	fileCacher, err := buffer.NewFileBuffer(
 		uint64(conf.GatewayCacheSize),
 		filepath.Join(conf.WorkSpace, config.FILE_CACHE_DIR),
@@ -162,6 +170,14 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 	if err != nil {
 		return errors.Wrap(err, "init handles runtime error")
 	}
+
+	h.Ac = NewAccessController(time.Minute, h.buffer, fileCacher)
+
+	if !conf.LaunchGateway {
+		return nil
+	}
+
+	// init gateway, if it be needed
 	log.Println("init gateway model ...")
 	if h.gateway, err = gateway.NewGateway(
 		redisCli, contractCli, fileCacher,
@@ -184,23 +200,13 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 	}()
 
 	go func() {
-		ticker := time.NewTicker(time.Minute * 15)
-		if err := h.gateway.LoadCdnNodes(); err != nil {
-			log.Println(err)
-		}
-		if err := h.gateway.LoadOssNodes(); err != nil {
+		ticker := time.NewTicker(time.Minute * 30)
+		if err := h.partners.DiscoveryRetrievers(); err != nil {
 			log.Println(err)
 		}
 		count := 0
 		for range ticker.C {
-			if err = h.gateway.LoadCdnNodes(); err != nil {
-				count++
-				if count%48 == 0 { //print error log per 6 hours
-					log.Println(err)
-					count = 0
-				}
-			}
-			if err = h.gateway.LoadOssNodes(); err != nil {
+			if err = h.partners.DiscoveryRetrievers(); err != nil {
 				count++
 				if count%48 == 0 { //print error log per 6 hours
 					log.Println(err)
@@ -254,10 +260,11 @@ func (h *ServerHandle) registerOssNode(conf config.Config) error {
 		return errors.Wrap(err, "register OSS node on chain error")
 	}
 	key := cli.GetKeyInOrder()
+	h.ossPubkey = key.PublicKey
 	oss, err := cli.QueryOss(key.PublicKey, 0)
 	cli.PutKey(key.Address)
 	if err == nil {
-		log.Println("already reigster oss :", oss)
+		log.Println("already reigster oss :", string(oss.Domain))
 		return nil
 	}
 	log.Println("query oss info error:", err)
@@ -353,7 +360,7 @@ func (h *ServerHandle) GetNodeInfo(c *gin.Context) {
 	bufferStatus := h.buffer.BufferStatus()
 	nodeStatus := h.node.NodeStatus()
 	c.JSON(http.StatusOK,
-		client.NewResponse(http.StatusOK, "succes", client.Cd2nNode{
+		tsproto.NewResponse(http.StatusOK, "succes", tsproto.Cd2nNode{
 			WorkAddr:  h.node.GetNodeAddress(),
 			TeeAddr:   h.teeAddr,
 			TeePubkey: h.teePubkey,
@@ -361,8 +368,8 @@ func (h *ServerHandle) GetNodeInfo(c *gin.Context) {
 			PoolId:    h.poolId,
 			EndPoint:  conf.Endpoint,
 			RedisAddr: conf.RedisAddress,
-			Status: client.Status{
-				DiskStatus: client.DiskStatus{
+			Status: tsproto.Status{
+				DiskStatus: tsproto.DiskStatus{
 					UsedCacheSize:  cacheStatus.UsedSize,
 					CacheItemNum:   cacheStatus.ItemNum,
 					CacheUsage:     cacheStatus.Usage,
@@ -370,18 +377,18 @@ func (h *ServerHandle) GetNodeInfo(c *gin.Context) {
 					BufferItemNum:  bufferStatus.ItemNum,
 					BufferUsage:    bufferStatus.Usage,
 				},
-				DistStatus: client.DistStatus{
+				DistStatus: tsproto.DistStatus{
 					Ongoing: gatewayStatus.Ongoing,
 					Done:    gatewayStatus.Done,
 					Retried: gatewayStatus.Retried,
 					FidNum:  gatewayStatus.FidNum,
 				},
-				RetrieveStatus: client.RetrieveStatus{
+				RetrieveStatus: tsproto.RetrieveStatus{
 					NTBR:         nodeStatus.NTBR,
 					RetrieveNum:  nodeStatus.RetrieveNum,
 					RetrievedNum: nodeStatus.RetrievedNum,
 				},
-				DownloadStatus: client.DownloadStatus{
+				DownloadStatus: tsproto.DownloadStatus{
 					DlingNum: gatewayStatus.DlingNum,
 				},
 			},

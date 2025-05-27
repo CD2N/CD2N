@@ -5,28 +5,36 @@ import (
 	"net/http"
 
 	"github.com/CD2N/CD2N/retriever/config"
-	"github.com/CD2N/CD2N/retriever/gateway"
-	"github.com/CD2N/CD2N/retriever/libs/client"
+	"github.com/CD2N/CD2N/sdk/sdkgo/libs/tsproto"
 	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/gin-gonic/gin"
 )
 
 func (h *ServerHandle) ClaimFile(c *gin.Context) {
-	var req gateway.FileRequest
+	var req tsproto.FileRequest
 	err := c.BindJSON(&req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "claim file error", "bad request params"))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "claim file error", "bad request params"))
 		return
 	}
-	// TODO: Node Filter
+
+	key, err := crypto.DecompressPubkey(req.Pubkey)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "claim file error", err.Error()))
+		return
+	}
+	addr := crypto.PubkeyToAddress(*key).Hex()
 
 	resp, err := h.gateway.ClaimFile(context.Background(), req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "claim file error", err.Error()))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "claim file error", err.Error()))
 		return
 	}
+	h.partners.UpdateCacherToken(resp.Token, addr)
+	h.partners.SaveOrUpdateCacher(req.Pubkey, c.ClientIP(), req.StorageNodes)
 	logger.GetLogger(config.LOG_PROVIDER).Infof("L2 Node %s claim fragments from file %s  success.", resp.Token, resp.Fid)
-	c.JSON(http.StatusOK, client.NewResponse(http.StatusOK, "success", resp))
+	c.JSON(http.StatusOK, tsproto.NewResponse(http.StatusOK, "success", resp))
 }
 
 func (h *ServerHandle) FetchFile(c *gin.Context) {
@@ -34,22 +42,17 @@ func (h *ServerHandle) FetchFile(c *gin.Context) {
 	fragment := c.Query("fragment")
 	token := c.Request.Header.Get("token")
 	if fid == "" || fragment == "" || token == "" {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "fetch file error", "bad request params"))
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "fetch file error", "bad request params"))
 		return
 	}
+	addr, _ := h.partners.GetCacherAddr(token)
 	fpath, err := h.gateway.FetchFile(context.Background(), fid, fragment, token)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusBadRequest, "fetch file error", err.Error()))
+		h.partners.CacherDistribution(addr, false)
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "fetch file error", err.Error()))
 		return
 	}
-	cid, err := h.node.GetDataCid(fragment)
-	if err != nil || cid == "" {
-		_, err = h.node.CalcDataCid(fragment, fpath)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, client.NewResponse(http.StatusInternalServerError, "fetch file error", err.Error()))
-			return
-		}
-	}
+	h.partners.CacherDistribution(addr, true)
 	logger.GetLogger(config.LOG_PROVIDER).Infof("L2 Node %s fetch fragment %s from file %s  success.", token, fragment, fid)
 	c.File(fpath)
 }
