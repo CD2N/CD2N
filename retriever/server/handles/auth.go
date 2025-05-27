@@ -3,7 +3,6 @@ package handles
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -24,7 +23,6 @@ const (
 )
 
 func (h *ServerHandle) GenToken(c *gin.Context) {
-	ts := time.Now()
 	acc := c.PostForm("account")
 	msg := c.PostForm("message")
 	sign := c.PostForm("sign")
@@ -59,7 +57,7 @@ func (h *ServerHandle) GenToken(c *gin.Context) {
 	}
 	resp := tsproto.NewResponse(http.StatusOK, "success", token)
 	c.JSON(resp.Code, resp)
-	log.Printf("account %s get token spent time:%v\n",acc,time.Since(ts))
+
 }
 
 func ParsingAndVerifyPublickey(acc, message, sign string) ([]byte, error) {

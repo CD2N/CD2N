@@ -3,7 +3,7 @@ module github.com/CD2N/CD2N/retriever
 go 1.23.0
 
 require (
-	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250514101950-9156ab9e3c2d
+	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250527055342-0712b48fba54
 	github.com/decred/base58 v1.0.5
 	github.com/ecies/go/v2 v2.0.10
 	github.com/ethereum/go-ethereum v1.15.2

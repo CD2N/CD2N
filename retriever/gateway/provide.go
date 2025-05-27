@@ -359,7 +359,7 @@ func (g *Gateway) GetCessClient() (*chain.Client, error) {
 		if _, err := g.cessCli.RPC.Chain.GetBlockHash(0); err == nil {
 			return g.cessCli, nil
 		}
-		if err := g.cessCli.RefreshSubstrateApi(); err != nil {
+		if err := g.cessCli.RefreshSubstrateApi(true); err != nil {
 			return nil, errors.Wrap(err, "get cess client error")
 		}
 		return g.cessCli, nil

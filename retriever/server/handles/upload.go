@@ -213,7 +213,7 @@ func (h *ServerHandle) uploadFile(c *gin.Context, file io.Reader, acc []byte, te
 	client.PutData(h.partRecord, config.DB_FINFO_PREFIX+finfo.Fid, task.AsyncFinfoBox{Info: finfo, NonProxy: noProxy})
 	//Precondition Check
 	resp := h.CheckPreconditions(finfo.Fid, territory, acc, finfo.FileSize)
-	logger.GetLogger(config.LOG_GATEWAY).Infof("file %s check preconditions time: %v", finfo.Fid, time.Since(st))
+
 	if resp.Code == response.CODE_UP_ERROR {
 		c.JSON(http.StatusInternalServerError, resp)
 		return
