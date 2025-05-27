@@ -77,7 +77,6 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 	}
 	var (
 		fragPaths []string
-		dataPaths []string
 		segPaths  []string
 	)
 
@@ -98,23 +97,25 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 		logger.GetLogger(config.LOG_GATEWAY).Infof("get fragments from local disk buffer:%v", len(fragPaths))
 		if len(fragPaths) < config.FRAGMENTS_NUM { //retrieve from L2 node, triggered when cache miss, low efficiency
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+			defer cancel()
 			task := node.NewCesRetrieveTask("", fid, sid, fragments)
 			paths, err := h.retr.RetrieveData(ctx, task)
-			cancel()
 			if err != nil {
-				continue
+				c.JSON(http.StatusInternalServerError,
+					tsproto.NewResponse(http.StatusInternalServerError, "download file error", err.Error()))
+				return
 			}
 			fragPaths = append(fragPaths, paths...)
 			logger.GetLogger(config.LOG_GATEWAY).Infof("get fragments from miner pool:%v", len(fragPaths))
 		}
 
-		dataPaths = append(dataPaths, fragPaths...)
 		//deal with fragments
 		if len(fragPaths) < config.FRAGMENTS_NUM {
 			c.JSON(http.StatusInternalServerError,
 				tsproto.NewResponse(http.StatusInternalServerError, "download file error", "insufficient cached fragments"))
 			return
 		}
+
 		segPath, err := h.gateway.CompositeSegment(sid, fragPaths)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError,
@@ -122,6 +123,11 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 			return
 		}
 		segPaths = append(segPaths, segPath)
+	}
+	if len(segPaths) != len(fmeta.SegmentList) || len(segPaths) <= 0 {
+		c.JSON(http.StatusInternalServerError,
+			tsproto.NewResponse(http.StatusInternalServerError, "download file error", "no valid segments were retrieved"))
+		return
 	}
 	fpath, err := h.gateway.CombineFileIntoCache(fid, fmeta.FileSize.Int64(), segPaths)
 	if err != nil {
@@ -131,7 +137,7 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 	}
 
 	h.gateway.ReleaseCacheTask(key) //allows repeated calls to minimize key usage
-	logger.GetLogger(config.LOG_GATEWAY).Infof("get file %s from providers", fid)
+	logger.GetLogger(config.LOG_GATEWAY).Infof("get file %s from CD2N network", fid)
 
 	err = ServeFile(c, string(fmeta.Owner[0].FileName), fpath, targetPath)
 	if err != nil {

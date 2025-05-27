@@ -80,7 +80,7 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 			return errors.Wrap(err, "init handles runtime error")
 		}
 		var data tsproto.TeeResp
-		for i := 0; i < 5; i++ {
+		for range 5 {
 			data, err = tsproto.QueryTeeInfo(u)
 			if err == nil && data.EthAddress != "" {
 				break
@@ -152,6 +152,23 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 	)
 	h.partners = node.NewNodeManager(contractCli)
 
+	go func() {
+		ticker := time.NewTicker(time.Minute * 30)
+		if err := h.partners.DiscoveryRetrievers(); err != nil {
+			log.Println(err)
+		}
+		count := 0
+		for range ticker.C {
+			if err = h.partners.DiscoveryRetrievers(); err != nil {
+				count++
+				if count%48 == 0 { //print error log per 6 hours
+					log.Println(err)
+					count = 0
+				}
+			}
+		}
+	}()
+
 	h.retr, err = node.NewResourceRetriever(
 		256, contractCli.Node.Hex(), h.partners,
 		h.buffer, h.node, contractCli.Signature,
@@ -199,22 +216,6 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 		}
 	}()
 
-	go func() {
-		ticker := time.NewTicker(time.Minute * 30)
-		if err := h.partners.DiscoveryRetrievers(); err != nil {
-			log.Println(err)
-		}
-		count := 0
-		for range ticker.C {
-			if err = h.partners.DiscoveryRetrievers(); err != nil {
-				count++
-				if count%48 == 0 { //print error log per 6 hours
-					log.Println(err)
-					count = 0
-				}
-			}
-		}
-	}()
 	go func() {
 		err := h.AsyncUploadFiles(ctx)
 		if err != nil {

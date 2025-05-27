@@ -193,8 +193,10 @@ func (rr *ResourceRetriever) BatchExecutor(ctx context.Context, indicators int, 
 					logger.GetLogger(config.LOG_RETRIEVE).Error("batch retrieval data error  ", err)
 					return
 				}
-				pathSet.Store(rpath, struct{}{})
-				pathCount.Add(1)
+				if rpath!=""{
+					pathSet.Store(rpath, struct{}{})
+					pathCount.Add(1)
+				}
 			}
 		})
 		if err != nil {

@@ -3,7 +3,7 @@ module github.com/CD2N/CD2N/cacher
 go 1.22.10
 
 require (
-	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250514101950-9156ab9e3c2d
+	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250527055342-0712b48fba54
 	github.com/centrifuge/go-substrate-rpc-client/v4 v4.2.1
 	github.com/cosmos/go-bip39 v1.0.0
 	github.com/ecies/go/v2 v2.0.10

@@ -135,7 +135,7 @@ func (c *Client) NewSubstrateAPI(rpcAddr string) error {
 func (c *Client) RefreshSubstrateApi(r bool) error {
 	var err error
 	count, lens := 1, len(c.Rpcs)
-	for r && count >= lens {
+	for r && count < lens {
 		i, j := rand.Intn(lens), rand.Intn(lens)
 		if i == j {
 			continue
