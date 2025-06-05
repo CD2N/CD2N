@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"path/filepath"
 	"time"
@@ -56,11 +57,12 @@ func (mg *Manager) RetrieveData(ctx context.Context, did, requester, reqId, extd
 	if err != nil {
 		return "", errors.Wrap(err, "retrieve data error")
 	}
-	logger.GetLogger(config.LOG_RETRIEVE).Info("new retrieve data task for fragment ", did)
 	timer := time.NewTimer(exp)
 	select {
+	case <-ctx.Done():
+		return "", errors.Wrap(ctx.Err(), "retrieve data error")
 	case <-timer.C:
-		return "", errors.Wrap(errors.New("timeout"), "retrieve data error")
+		return "", errors.Wrap(errors.New("task timeout"), "retrieve data error")
 	case tid := <-ch:
 		mg.retrievedNum.Add(1)
 		return tid, nil
@@ -68,12 +70,12 @@ func (mg *Manager) RetrieveData(ctx context.Context, did, requester, reqId, extd
 }
 
 func (mg *Manager) ReceiveData(ctx context.Context, tid, provider, fpath string, pubkey []byte) error {
-	ok, err := client.SetNxMessage(mg.redisCli, ctx, tid+"-dlock", []byte{}, time.Second)
+	ok, err := client.SetNxMessage(mg.redisCli, ctx, tid+"-dlock", []byte{}, time.Millisecond*200)
 	if err != nil {
 		return errors.Wrap(err, "receive data error")
 	}
 	if !ok {
-		return errors.Wrap(errors.New("task data is occupied"), "receive data error")
+		return errors.Wrap(fmt.Errorf("task %s is occupied", tid), "receive data error")
 	}
 	task, err := mg.GetRetrieveTask(ctx, tid)
 	if err != nil {
@@ -88,7 +90,7 @@ func (mg *Manager) ReceiveData(ctx context.Context, tid, provider, fpath string,
 		return errors.Wrap(err, "receive data error")
 	}
 
-	logger.GetLogger(config.LOG_RETRIEVE).Infof("receive data %s ,task id: %s", task.Did, tid)
+	logger.GetLogger(config.LOG_RETRIEVE).Infof("receive data %s, from file %s ,task id: %s", task.Did, task.ExtData, tid)
 	mg.callbackCh <- tid
 	return nil
 }
@@ -104,6 +106,7 @@ func (mg *Manager) NewRetrieveDataTask(ctx context.Context, did, requester, reqI
 	if err != nil {
 		return nil, errors.Wrap(err, "new retrieve data task error")
 	}
+	logger.GetLogger(config.LOG_RETRIEVE).Infof("new retrieve data task %s for fragment %s, from file %s", task.Tid, did, extdata)
 	mg.rw.Lock()
 	defer mg.rw.Unlock()
 	mg.rtasks[task.Tid] = ch
@@ -171,7 +174,7 @@ func (mg *Manager) RetrieveDataFromL2(ctx context.Context, reqId, extdata, user 
 	} else {
 		user = utils.Remove0x(user)
 	}
-	if task.Pubkey != nil {
+	if len(task.Pubkey) > 0 {
 		tidBytes, _ := hex.DecodeString(tid)
 		if err = tsproto.AuditData(u, task.DataPath, rpath, tsproto.TeeReq{
 			Cid:         did,

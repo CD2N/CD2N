@@ -76,6 +76,7 @@ const (
 	DEFAULT_GASFREECAP         = 108694000460
 	DEFAULT_GASLIMIT           = 30000000
 	DEFAULT_CHAINID            = 11330
+	VERSION="0.8.1"
 )
 
 const (

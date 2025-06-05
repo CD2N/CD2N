@@ -1,10 +1,6 @@
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
-github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250509083642-15dea38f1bc6 h1:grtEzOkjegouUmU2IJjU4SyUP+oSGI2SxqzSghbGteA=
-github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250509083642-15dea38f1bc6/go.mod h1:jLHhp2nQHh6ujSPH60JdSkjE88sQTk30ub0HxgU+omc=
-github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250514101950-9156ab9e3c2d h1:AqfPreGAk0fyFmDSiGSfzoB4qjxc5XfCPS8wz+dob3M=
-github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250514101950-9156ab9e3c2d/go.mod h1:jLHhp2nQHh6ujSPH60JdSkjE88sQTk30ub0HxgU+omc=
-github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250527055342-0712b48fba54 h1:/GXdd1poAOkXnN+IcN2BRxVlpXHYqQJNsAzItqBJD00=
-github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250527055342-0712b48fba54/go.mod h1:jLHhp2nQHh6ujSPH60JdSkjE88sQTk30ub0HxgU+omc=
+github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250527092815-fcb0fc755f3a h1:C617b6dkHBS2ci8yeI1FA/qu/xrUQiMe4IB4lB3bqAQ=
+github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250527092815-fcb0fc755f3a/go.mod h1:jLHhp2nQHh6ujSPH60JdSkjE88sQTk30ub0HxgU+omc=
 github.com/ChainSafe/go-schnorrkel v1.1.0 h1:rZ6EU+CZFCjB4sHUE1jIu8VDoB/wRKZxoe1tkcO71Wk=
 github.com/ChainSafe/go-schnorrkel v1.1.0/go.mod h1:ABkENxiP+cvjFiByMIZ9LYbRoNNLeBLiakC1XeTFxfE=
 github.com/DataDog/zstd v1.4.5 h1:EndNeuB0l9syBZhut0wns3gV1hL8zX8LIu6ZiVHWLIQ=
@@ -547,6 +543,7 @@ github.com/tklauser/numcpus v0.6.1 h1:ng9scYS7az0Bk4OZLvrNXNSAO2Pxr1XXRAPyjhIx+F
 github.com/tklauser/numcpus v0.6.1/go.mod h1:1XfjsgE2zo8GVw7POkMbHENHzVg3GzmoZ9fESEdAacY=
 github.com/twitchyliquid64/golang-asm v0.15.1 h1:SU5vSMR7hnwNxj24w34ZyCi/FmDZTkS4MhqMhdFk5YI=
 github.com/twitchyliquid64/golang-asm v0.15.1/go.mod h1:a1lVb/DtPvCB8fslRZhAngC2+aY1QWCk3Cedj/Gdt08=
+github.com/twmb/murmur3 v1.1.6 h1:mqrRot1BRxm+Yct+vavLMou2/iJt0tNVTTC0QoIjaZg=
 github.com/twmb/murmur3 v1.1.6/go.mod h1:Qq/R7NUyOfr65zD+6Q5IHKsJLwP7exErjN6lyyq3OSQ=
 github.com/ugorji/go/codec v1.2.12 h1:9LC83zGrHhuUA9l16C9AHXAqEV/2wBQ4nkvumAE65EE=
 github.com/ugorji/go/codec v1.2.12/go.mod h1:UNopzCgEMSXjBc6AOMqYvWC1ktqTAfzJZUZgYf6w6lg=

@@ -66,6 +66,7 @@ type FileMeta struct {
 }
 
 type Cd2nNode struct {
+	Version            string   `json:"version"`
 	WorkAddr           string   `json:"work_addr"`
 	TeeAddr            string   `json:"tee_addr"`
 	TeePubkey          []byte   `json:"tee_pubkey"`

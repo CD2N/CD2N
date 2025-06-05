@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"strconv"
@@ -100,11 +99,7 @@ func (h *ServerHandle) UploadLocalFile(c *gin.Context) {
 }
 
 func (h *ServerHandle) UploadUserFileTemp(c *gin.Context) {
-	ts := time.Now()
 	acc := c.PostForm("account")
-	defer func() {
-		log.Printf("account %s upload file spent time:%v\n", acc, time.Since(ts))
-	}()
 	pubkey, err := utils.ParsingPublickey(acc)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "upload user file error", err.Error()))

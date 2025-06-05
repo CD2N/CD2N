@@ -3,7 +3,8 @@ module github.com/CD2N/CD2N/retriever
 go 1.23.0
 
 require (
-	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250527055342-0712b48fba54
+	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250527092815-fcb0fc755f3a
+	github.com/bits-and-blooms/bloom/v3 v3.7.0
 	github.com/decred/base58 v1.0.5
 	github.com/ecies/go/v2 v2.0.10
 	github.com/ethereum/go-ethereum v1.15.2
@@ -13,6 +14,7 @@ require (
 	github.com/ipfs/boxo v0.24.0
 	github.com/ipfs/go-cid v0.4.1
 	github.com/ipfs/go-unixfs v0.4.5
+	github.com/juju/ratelimit v1.0.2
 	github.com/klauspost/reedsolomon v1.12.4
 	github.com/mholt/archiver v3.1.1+incompatible
 	github.com/panjf2000/ants/v2 v2.10.0
@@ -26,7 +28,6 @@ require (
 )
 
 require (
-	github.com/bits-and-blooms/bloom/v3 v3.7.0 // indirect
 	github.com/ipfs/go-blockservice v0.5.2 // indirect
 	github.com/ipfs/go-ipfs-blockstore v1.3.1 // indirect
 	github.com/ipfs/go-ipfs-chunker v0.0.1 // indirect
@@ -36,7 +37,6 @@ require (
 	github.com/ipfs/go-ipfs-posinfo v0.0.1 // indirect
 	github.com/ipfs/go-merkledag v0.11.0 // indirect
 	github.com/ipfs/go-verifcid v0.0.3 // indirect
-	github.com/juju/ratelimit v1.0.2 // indirect
 	github.com/panjf2000/ants v1.3.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/whyrusleeping/chunker v0.0.0-20181014151217-fe64bd25879f // indirect
