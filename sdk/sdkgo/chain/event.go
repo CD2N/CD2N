@@ -17,6 +17,18 @@ var (
 	ErrTxEventNotFound = errors.New("tx event not found")
 )
 
+// ParseTxResult parses transaction events to find the target event and validate transaction status.
+// Processes events, checks for extrinsic success/failure, and matches the specified event name.
+// Parameters:
+//
+//	caller - Keyring pair of the transaction caller
+//	events - List of events from the transaction block
+//	eventName - Target event name to search for (e.g., "Balances.Transfer")
+//
+// Returns:
+//
+//	Target event if found
+//	Error if parsing fails, event not found, or transaction failed
 func (cli *Client) ParseTxResult(caller signature.KeyringPair, events []*parser.Event, eventName string) (*parser.Event, error) {
 	var (
 		event   *parser.Event
@@ -62,6 +74,16 @@ func (cli *Client) ParseTxResult(caller signature.KeyringPair, events []*parser.
 	return event, errors.Wrap(ErrTxEventNotFound, "parse tx events error")
 }
 
+// DecodeEvent decodes a blockchain event into a user-provided struct.
+// Handles reflection to map event fields to struct fields, includes error recovery for panics.
+// Parameters:
+//
+//	event - Parsed event data from the blockchain
+//	value - Pointer to a struct to decode the event into
+//
+// Returns:
+//
+//	Error if decoding fails (invalid input, type mismatch, etc.)
 func DecodeEvent(event *parser.Event, value any) (err error) {
 	defer func() {
 		d := recover()
@@ -85,6 +107,16 @@ func DecodeEvent(event *parser.Event, value any) (err error) {
 	return errors.Wrap(DecodeFields(rv, reflect.ValueOf(event.Fields)), "decode event error")
 }
 
+// DecodeFields recursively decodes event fields into a target struct/type.
+// Handles structs, arrays, slices, maps, and primitive types with type conversion.
+// Parameters:
+//
+//	target - Reflect value of the target to decode into
+//	fv - Reflect value of the source field data
+//
+// Returns:
+//
+//	Error if type mismatch or decoding fails
 func DecodeFields(target, fv reflect.Value) error {
 	tt, ft := target.Type(), fv.Type()
 	if ft.Kind() == reflect.Interface {
@@ -190,6 +222,15 @@ func DecodeFields(target, fv reflect.Value) error {
 	return nil
 }
 
+// ConvertName converts snake_case field names to CamelCase for struct field mapping.
+// Processes namespaces (e.g., "transaction_fee_paid" → "TransactionFeePaid").
+// Parameters:
+//
+//	name - Original field name in snake_case format
+//
+// Returns:
+//
+//	CamelCase formatted name
 func ConvertName(name string) string {
 	var res string
 	bases := strings.Split(name, ".")

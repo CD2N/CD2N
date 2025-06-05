@@ -6,6 +6,17 @@ import (
 	"github.com/pkg/errors"
 )
 
+// QueryBlockNumber retrieves the block number from the blockchain.
+// If blockhash is provided, it queries the block number for the specified block hash.
+// If blockhash is empty, it retrieves the latest block number.
+// Parameters:
+//
+//	blockhash - The hexadecimal string of the block hash (empty for the latest block).
+//
+// Returns:
+//
+//	uint32 - The block number.
+//	error - An error if the query fails, including decoding errors or RPC failures.
 func (c *Client) QueryBlockNumber(blockhash string) (uint32, error) {
 	var (
 		block *types.SignedBlock
@@ -27,6 +38,16 @@ func (c *Client) QueryBlockNumber(blockhash string) (uint32, error) {
 	return uint32(block.Block.Header.Number), nil
 }
 
+// QueryAccountInfo retrieves the account information for a specific account at the given block height.
+// Parameters:
+//
+//	account - The byte slice representing the account address.
+//	block - The block number at which to query the account information.
+//
+// Returns:
+//
+//	types.AccountInfo - The account information struct containing details like nonce, consumers, providers, etc.
+//	error - An error if the query fails, including account ID creation errors, encoding errors, or storage query failures.
 func (c *Client) QueryAccountInfo(account []byte, block uint32) (types.AccountInfo, error) {
 	acc, err := types.NewAccountID(account)
 	if err != nil {
