@@ -64,6 +64,17 @@ type PartsInfo struct {
 	UpdateDate time.Time `json:"update_date,omitempty"`
 }
 
+// SignedSR25519WithMnemonic signs a message using the SR25519 scheme with a given mnemonic.
+// It appends "<Bytes>" and "</Bytes>" to the message before signing.
+// Parameters:
+//
+//	mnemonic - The mnemonic phrase used for signing.
+//	msg - The message to be signed.
+//
+// Returns:
+//
+//	[]byte - The signed message.
+//	error - An error if the mnemonic is invalid or signing fails.
 func SignedSR25519WithMnemonic(mnemonic string, msg []byte) ([]byte, error) {
 
 	pri, err := sr25519.Scheme{}.FromPhrase(mnemonic, "")
@@ -74,6 +85,19 @@ func SignedSR25519WithMnemonic(mnemonic string, msg []byte) ([]byte, error) {
 	return pri.Sign(msg)
 }
 
+// GenGatewayAccessToken generates an access token for the gateway using the provided base URL, message, account, and signature.
+// It sends a POST request to the "/gateway/gentoken" endpoint with the necessary parameters.
+// Parameters:
+//
+//	baseUrl - The base URL of the gateway.
+//	message - The message to be signed.
+//	account - The account associated with the token.
+//	sign - The signature of the message.
+//
+// Returns:
+//
+//	string - The generated access token.
+//	error - An error if the request fails or the response is invalid.
 func GenGatewayAccessToken(baseUrl, message, account string, sign []byte) (string, error) {
 	var (
 		token  string
@@ -126,11 +150,11 @@ func uploadFile(baseUrl, token, territory, filename string, file io.Reader, asyn
 	if err != nil {
 		return nil, errors.Wrap(err, "upload user file error")
 	}
-	if _, err := io.Copy(part, file); err != nil {
+	if _, err = io.Copy(part, file); err != nil {
 		return nil, errors.Wrap(err, "upload user file error")
 	}
 
-	if err := writer.Close(); err != nil {
+	if err = writer.Close(); err != nil {
 		return nil, errors.Wrap(err, "upload user file error")
 	}
 	headers := map[string]string{
@@ -148,6 +172,20 @@ func uploadFile(baseUrl, token, territory, filename string, file io.Reader, asyn
 	return body, nil
 }
 
+// UploadFile uploads a file to the specified territory.
+// It sends a POST request to the "/gateway/upload/file" endpoint with the necessary parameters.
+// Parameters:
+//
+//	baseUrl - The base URL of the gateway.
+//	token - The access token for authentication.
+//	territory - The territory to which the file will be uploaded.
+//	filename - The name of the file to be uploaded.
+//	file - The file content to be uploaded.
+//
+// Returns:
+//
+//	string - The file identifier (FID) if the upload is successful.
+//	error - An error if the upload fails.
 func UploadFile(baseUrl, token, territory, filename string, file io.Reader) (string, error) {
 	var (
 		fid string
@@ -165,6 +203,21 @@ func UploadFile(baseUrl, token, territory, filename string, file io.Reader) (str
 	return fid, nil
 }
 
+// AsyncUploadFile uploads a file asynchronously to the specified territory.
+// It sends a POST request to the "/gateway/upload/file" endpoint with the necessary parameters.
+// Parameters:
+//
+//	baseUrl - The base URL of the gateway.
+//	token - The access token for authentication.
+//	territory - The territory to which the file will be uploaded.
+//	filename - The name of the file to be uploaded.
+//	file - The file content to be uploaded.
+//	noProxy - Whether to not create file orders through OSS proxy.
+//
+// Returns:
+//
+//	FileInfo - Information about the uploaded file.
+//	error - An error if the upload fails.
 func AsyncUploadFile(baseUrl, token, territory, filename string, file io.Reader, noProxy bool) (FileInfo, error) {
 	var (
 		info FileInfo
@@ -258,6 +311,19 @@ func uploadFileParts(baseUrl, token, fpath string, info *PartsInfo, async, noPro
 	return body, nil
 }
 
+// UploadFileParts uploads file parts to the specified territory.
+// It sends a POST request to the "/gateway/upload/part" endpoint with the necessary parameters.
+// Parameters:
+//
+//	baseUrl - The base URL of the gateway.
+//	token - The access token for authentication.
+//	fpath - The path of the file to be uploaded.
+//	info - Information about the file parts to be uploaded.
+//
+// Returns:
+//
+//	string - The file identifier (FID) if the upload is successful.
+//	error - An error if the upload fails.
 func UploadFileParts(baseUrl, token, fpath string, info *PartsInfo) (string, error) {
 	var (
 		fid string
@@ -274,6 +340,20 @@ func UploadFileParts(baseUrl, token, fpath string, info *PartsInfo) (string, err
 	return fid, nil
 }
 
+// AsyncUploadFileParts uploads file parts asynchronously to the specified territory.
+// It sends a POST request to the "/gateway/upload/part" endpoint with the necessary parameters.
+// Parameters:
+//
+//	baseUrl - The base URL of the gateway.
+//	token - The access token for authentication.
+//	fpath - The path of the file to be uploaded.
+//	info - Information about the file parts to be uploaded.
+//	noProxy - Whether to not create file orders through OSS proxy.
+//
+// Returns:
+//
+//	FileInfo - Information about the uploaded file.
+//	error - An error if the upload fails.
 func AsyncUploadFileParts(baseUrl, token, fpath string, info *PartsInfo, noProxy bool) (FileInfo, error) {
 	var (
 		finfo FileInfo
@@ -298,6 +378,22 @@ func AsyncUploadFileParts(baseUrl, token, fpath string, info *PartsInfo, noProxy
 	return finfo, nil
 }
 
+// RequestToUploadParts requests to upload file parts to the specified territory.
+// It sends a POST request to the "/gateway/part-upload" endpoint with the necessary parameters.
+// Parameters:
+//
+//	baseUrl - The base URL of the gateway.
+//	token - The access token for authentication.
+//	fpath - The path of the file to be uploaded.
+//	territory - The territory to which the file will be uploaded.
+//	filename - The name of the file to be uploaded.
+//	achive - The archive name of the file to be uploaded.
+//	partSize - The size of each part to be uploaded.
+//
+// Returns:
+//
+//	PartsInfo - Information about the file parts to be uploaded.
+//	error - An error if the request fails.
 func RequestToUploadParts(baseUrl, fpath, token, territory, filename, achive string, partSize int64) (PartsInfo, error) {
 	var info PartsInfo
 	fs, err := os.Stat(fpath)
@@ -333,6 +429,19 @@ func RequestToUploadParts(baseUrl, fpath, token, territory, filename, achive str
 	return info, errors.Wrap(err, "request to upload file parts error")
 }
 
+// CreatePartsInfoForFile creates parts information for a file.
+// It calculates the hash of each part and the shadow hash of the file.
+// Parameters:
+//
+//	fpath - The path of the file.
+//	filename - The name of the file.
+//	fileSize - The size of the file.
+//	partSize - The size of each part.
+//
+// Returns:
+//
+//	PartsInfo - Information about the file parts.
+//	error - An error if the file cannot be opened or read.
 func CreatePartsInfoForFile(fpath, filename string, fileSize, partSize int64) (PartsInfo, error) {
 
 	if partSize <= DEFAULT_PART_SIZE {
@@ -378,6 +487,18 @@ func CreatePartsInfoForFile(fpath, filename string, fileSize, partSize int64) (P
 	return info, nil
 }
 
+// CreatePartsInfoForDir creates parts information for a directory.
+// It calculates the hash of each file in the directory and the shadow hash of the directory.
+// Parameters:
+//
+//	fpath - The path of the directory.
+//	dirname - The name of the directory.
+//	archive - The name of the archive.
+//
+// Returns:
+//
+//	PartsInfo - Information about the directory parts.
+//	error - An error if the directory cannot be opened or read.
 func CreatePartsInfoForDir(fpath, dirname, archive string) (PartsInfo, error) {
 	info := PartsInfo{
 		DirName: dirname,
