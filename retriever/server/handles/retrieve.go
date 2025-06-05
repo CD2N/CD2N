@@ -27,14 +27,14 @@ func (h *ServerHandle) QueryData(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "query data error", "bad query params"))
 		return
 	}
-	fpaths := h.GetDataFromDiskBuffer(did)
+	fpaths, _ := h.GetDataFromDiskBuffer(did)
 	c.JSON(http.StatusOK, tsproto.NewResponse(http.StatusOK, "success", len(fpaths) > 0))
 }
 
 func (h *ServerHandle) FetchCacheData(c *gin.Context) {
 
 	var req tsproto.CacheRequest
-	err := c.BindJSON(&req)
+	err := c.ShouldBindBodyWithJSON(&req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "fetch data error", err.Error()))
 		return
@@ -42,22 +42,31 @@ func (h *ServerHandle) FetchCacheData(c *gin.Context) {
 	if time.Duration(req.Exp) <= 0 || time.Duration(req.Exp) > time.Minute {
 		req.Exp = int64(time.Second * 15)
 	}
-
-	task := node.NewCesRetrieveTask(req.UserAddr, req.ExtData, "", []string{req.Did})
-	fpaths, err := h.retr.RetrieveData(
-		context.Background(), task,
-		h.Ac.BackFetchFilterFactory(),
-		h.Ac.JumpRequestFilterFactory(),
-		h.Ac.BoradcastFilterFactory(),
-	)
+	cessCli, err := h.gateway.GetCessClient()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "fetch data error", err.Error()))
+		c.JSON(http.StatusInternalServerError,
+			tsproto.NewResponse(http.StatusInternalServerError, "fetch data error", err.Error()))
 		return
 	}
 
+	fpaths, _ := h.GetDataFromDiskBuffer(req.Did)
 	if len(fpaths) <= 0 {
-		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "The specified data was not retrieved", nil))
-		return
+		task := node.NewCesRetrieveTask(cessCli, req.UserAddr, req.ExtData, "", []string{req.Did})
+		fpaths, err = h.retr.RetrieveData(
+			context.Background(), task,
+			h.Ac.BackFetchFilterFactory(),
+			h.Ac.JumpRequestFilterFactory(),
+			h.Ac.BoradcastFilterFactory(),
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "fetch data error", err.Error()))
+			return
+		}
+
+		if len(fpaths) <= 0 {
+			c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "The specified data was not retrieved", nil))
+			return
+		}
 	}
 
 	if info, err := os.Stat(fpaths[0]); err != nil {
@@ -70,6 +79,7 @@ func (h *ServerHandle) FetchCacheData(c *gin.Context) {
 		}
 		h.partners.RetrieverSend(req.UserAddr, uint64(info.Size()))
 	}
+	logger.GetLogger(config.LOG_RETRIEVE).Infof("retrieved data: %s, from file %s", req.Did, req.ExtData)
 	c.File(fpaths[0])
 	h.buffer.AddData(req.Did, fpaths[0])
 }

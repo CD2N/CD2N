@@ -141,7 +141,7 @@ func (ac *AccessController) RetrieveLimitMiddleware() gin.HandlerFunc {
 			return
 		}
 		var req tsproto.CacheRequest
-		if err := c.BindJSON(&req); err != nil || req.UserAddr == "" || (req.Did == "" && req.ExtData == "") {
+		if err := c.ShouldBindBodyWithJSON(&req); err != nil || req.UserAddr == "" || (req.Did == "" && req.ExtData == "") {
 			c.AbortWithStatusJSON(400, tsproto.NewResponse(400, "The request parameters are incorrect.", nil))
 			return
 		}

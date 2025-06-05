@@ -108,10 +108,11 @@ func NewResourceRetriever(threadNum int, nodeAddr string, nodeMgr *NodeManager, 
 
 func (rr *ResourceRetriever) GetDataFromRemote(did, extData string, node Retriever) (string, error) {
 	var fpath string
-	u, err := url.JoinPath(node.Info.Endpoint, tsproto.FETCH_CACHE_DATA_URL, did, rr.nodeAddr)
+	u, err := url.JoinPath(node.Info.Endpoint, tsproto.FETCH_CACHE_DATA_URL)
 	if err != nil {
 		return fpath, errors.Wrap(err, "retrieve data from remote retriever error")
 	}
+
 	reqId, sign, err := rr.SignRequestTool()
 	if err != nil {
 		return fpath, errors.Wrap(err, "retrieve data from remote retriever error")
@@ -175,13 +176,14 @@ func (rr *ResourceRetriever) Execute(ctx context.Context, task RetrieverTask) ([
 
 func (rr *ResourceRetriever) BatchExecutor(ctx context.Context, indicators int, worker Worker, uris ...string) []string {
 	if indicators <= 0 {
-		indicators = config.FRAGMENTS_NUM
+		indicators = len(uris)
 	}
 	subWg := &sync.WaitGroup{}
-	pathSet, pathCount := &sync.Map{}, &atomic.Int32{}
-	for i, uri := range uris {
-		subWg.Add(1)
+	pathSet, pathCount := make(chan string, len(uris)), &atomic.Int32{}
 
+	for i, u := range uris {
+		subWg.Add(1)
+		uri := u
 		err := rr.pool.Submit(func() {
 			defer subWg.Done()
 			select {
@@ -193,8 +195,8 @@ func (rr *ResourceRetriever) BatchExecutor(ctx context.Context, indicators int, 
 					logger.GetLogger(config.LOG_RETRIEVE).Error("batch retrieval data error  ", err)
 					return
 				}
-				if rpath!=""{
-					pathSet.Store(rpath, struct{}{})
+				if rpath != "" {
+					pathSet <- rpath
 					pathCount.Add(1)
 				}
 			}
@@ -202,7 +204,7 @@ func (rr *ResourceRetriever) BatchExecutor(ctx context.Context, indicators int, 
 		if err != nil {
 			logger.GetLogger(config.LOG_RETRIEVE).Error("batch retrieval data error  ", err)
 		}
-		if i > 0 && (i+1)%indicators == 0 {
+		if (i > 0 || indicators == 1) && (i+1)%indicators == 0 {
 			subWg.Wait()
 			if pathCount.Load() >= int32(indicators) {
 				logger.GetLogger(config.LOG_RETRIEVE).Info("batch retrieve success")
@@ -212,11 +214,11 @@ func (rr *ResourceRetriever) BatchExecutor(ctx context.Context, indicators int, 
 		}
 	}
 	subWg.Wait()
+	close(pathSet)
 	var paths []string
-	pathSet.Range(func(key, value any) bool {
-		paths = append(paths, key.(string))
-		return true
-	})
+	for p := range pathSet {
+		paths = append(paths, p)
+	}
 	return paths
 }
 func (rr *ResourceRetriever) Executor(ctx context.Context, worker Worker, uri string) (string, error) {
@@ -259,6 +261,7 @@ type CessRetrieveTask struct {
 	Executor
 	NodesProvider
 	ToolsProvider
+	cli        *chain.Client
 	Filters    []RequestFilter
 	FiltePoint int
 	User       string
@@ -267,8 +270,9 @@ type CessRetrieveTask struct {
 	Fragments  []string
 }
 
-func NewCesRetrieveTask(user, fid, segment string, fragments []string) RetrieverTask {
+func NewCesRetrieveTask(cli *chain.Client, user, fid, segment string, fragments []string) RetrieverTask {
 	return &CessRetrieveTask{
+		cli:       cli,
 		User:      user,
 		Fid:       fid,
 		Segment:   segment,
@@ -294,7 +298,7 @@ func (t CessRetrieveTask) Execute(ctx context.Context) ([]string, error) {
 	}
 	retriever, ok := t.LocatingResources(nodes)
 	if ok {
-		fpaths := t.BatchExecutor(ctx, config.FRAGMENTS_NUM, func(ctx context.Context, did string) (string, error) {
+		fpaths := t.BatchExecutor(ctx, len(t.Fragments)-config.PARITY_NUM, func(ctx context.Context, did string) (string, error) {
 			//access L2 cache to retrieve data from this node
 			if retriever.Info.Endpoint == "" && retriever.Info.Address == "" && Abort(t.FiltePoint, ABORT_BACK_FETCH) {
 				reqId, sign, err := t.SignRequestTool()
@@ -338,7 +342,7 @@ func (t CessRetrieveTask) Execute(ctx context.Context) ([]string, error) {
 	}
 	close(idxCh)
 
-	fpaths := t.BatchExecutor(ctx, config.FRAGMENTS_NUM, func(ctx context.Context, did string) (string, error) {
+	fpaths := t.BatchExecutor(ctx, len(t.Fragments)-config.PARITY_NUM, func(ctx context.Context, did string) (string, error) {
 		idx := <-idxCh
 		fpath, err := t.GetDataFromRemote(did, t.Fid, retrievers[idx])
 		return fpath, errors.Wrap(err, "execute worker error")
@@ -349,10 +353,7 @@ func (t CessRetrieveTask) Execute(ctx context.Context) ([]string, error) {
 func (t CessRetrieveTask) QueryStorageNodes() ([]string, error) {
 	conf := config.GetConfig()
 	var nodes []string
-	cli, err := chain.NewLightCessClient("", conf.Rpcs)
-	if err != nil {
-		return nodes, errors.Wrap(err, "query storage nodes error")
-	}
+
 	chainId := uint16(conf.ChainId)
 	switch chainId {
 	case utils.MAINNET_FORMAT, utils.TESTNET_FORMAT:
@@ -360,9 +361,9 @@ func (t CessRetrieveTask) QueryStorageNodes() ([]string, error) {
 		chainId = utils.MAINNET_FORMAT
 
 	}
-	fmeta, err := cli.QueryFileMetadata(t.Fid, 0)
+	fmeta, err := t.cli.QueryFileMetadata(t.Fid, 0)
 	if err != nil {
-		dealmap, err := cli.QueryDealMap(t.Fid, 0)
+		dealmap, err := t.cli.QueryDealMap(t.Fid, 0)
 		if err != nil {
 			return nodes, errors.Wrap(err, "query storage nodes error")
 		}

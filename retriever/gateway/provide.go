@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -313,7 +312,6 @@ func RemoveSubTaskFiles(buffer *buffer.FileBuffer, groupId int, ftask task.Provi
 	for i := range ftask.Fragments {
 		err := buffer.RemoveData(filepath.Join(ftask.BaseDir, ftask.Fragments[i][groupId]))
 		if err != nil {
-			log.Println("[Remove Subtask]", err)
 			return err
 		}
 	}
@@ -343,9 +341,7 @@ func TaskGc(buffer *buffer.FileBuffer, ftask task.ProvideTask) {
 	for i := range ftask.Fragments {
 		for j := range ftask.Fragments[i] {
 			fpath := filepath.Join(ftask.BaseDir, ftask.Fragments[i][j])
-			if err := buffer.RemoveData(fpath); err != nil {
-				log.Println("[Task GC]", err)
-			}
+			buffer.RemoveData(fpath)
 		}
 	}
 	if entries, err := os.ReadDir(ftask.BaseDir); err != nil || len(entries) == 0 {

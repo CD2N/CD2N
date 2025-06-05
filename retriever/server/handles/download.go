@@ -55,7 +55,7 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 				fname = key
 			}
 		}
-		logger.GetLogger(config.LOG_GATEWAY).Infof("get file %s from local disk cache, item: %v", key, item)
+		logger.GetLogger(config.LOG_GATEWAY).Infof("get file %s from local disk cache", key)
 		err = ServeFile(c, fname, fpath, targetPath)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError,
@@ -93,12 +93,12 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 		}
 
 		fragments := ParseDataIds(seg)
-		fragPaths = h.GetDataFromDiskBuffer(fragments...) //retrieve from local buffer
+		fragPaths, fragments = h.GetDataFromDiskBuffer(fragments...) //retrieve from local buffer
 		logger.GetLogger(config.LOG_GATEWAY).Infof("get fragments from local disk buffer:%v", len(fragPaths))
 		if len(fragPaths) < config.FRAGMENTS_NUM { //retrieve from L2 node, triggered when cache miss, low efficiency
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 			defer cancel()
-			task := node.NewCesRetrieveTask("", fid, sid, fragments)
+			task := node.NewCesRetrieveTask(cessCli, "", fid, sid, fragments)
 			paths, err := h.retr.RetrieveData(ctx, task)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError,
@@ -106,7 +106,7 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 				return
 			}
 			fragPaths = append(fragPaths, paths...)
-			logger.GetLogger(config.LOG_GATEWAY).Infof("get fragments from miner pool:%v", len(fragPaths))
+			logger.GetLogger(config.LOG_GATEWAY).Infof("get fragments from miner pool(bridged via L2 cachers):%v", len(paths))
 		}
 
 		//deal with fragments
@@ -147,18 +147,23 @@ func (h *ServerHandle) DownloadUserFile(c *gin.Context) {
 
 }
 
-func (h *ServerHandle) GetDataFromDiskBuffer(dids ...string) []string {
-	var res []string
+func (h *ServerHandle) GetDataFromDiskBuffer(dids ...string) ([]string, []string) {
+	var (
+		res  []string
+		rems []string
+	)
 	for _, did := range dids {
 		item := h.buffer.GetData(did)
 		if item.Value != "" {
 			res = append(res, item.Value)
+		} else {
+			rems = append(rems, did)
 		}
 		if len(res) >= config.FRAGMENTS_NUM {
-			return res
+			return res, rems
 		}
 	}
-	return res
+	return res, rems
 }
 
 func ParseFileRange(frange string) (int64, int64, error) {

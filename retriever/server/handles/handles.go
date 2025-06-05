@@ -362,13 +362,14 @@ func (h *ServerHandle) GetNodeInfo(c *gin.Context) {
 	nodeStatus := h.node.NodeStatus()
 	c.JSON(http.StatusOK,
 		tsproto.NewResponse(http.StatusOK, "succes", tsproto.Cd2nNode{
-			WorkAddr:  h.node.GetNodeAddress(),
-			TeeAddr:   h.teeAddr,
-			TeePubkey: h.teePubkey,
-			IsGateway: h.gateway != nil,
-			PoolId:    h.poolId,
-			EndPoint:  conf.Endpoint,
-			RedisAddr: conf.RedisAddress,
+			WorkAddr:           h.node.GetNodeAddress(),
+			TeeAddr:            h.teeAddr,
+			TeePubkey:          h.teePubkey,
+			IsGateway:          h.gateway != nil,
+			PoolId:             h.poolId,
+			EndPoint:           conf.Endpoint,
+			RedisAddr:          conf.RedisAddress,
+			ActiveStorageNodes: h.retr.ExportStorageNodes(),
 			Status: tsproto.Status{
 				DiskStatus: tsproto.DiskStatus{
 					UsedCacheSize:  cacheStatus.UsedSize,

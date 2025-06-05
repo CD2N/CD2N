@@ -3,6 +3,7 @@ package node
 import (
 	"encoding/hex"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -332,6 +333,7 @@ func (nm *NodeManager) DiscoveryRetrievers() error {
 				Endpoint: endpoint,
 				Active:   true,
 			}, data.ActiveStorageNodes)
+			log.Println("save or update retriever:", data.WorkAddr, data.EndPoint)
 		}
 	}
 	// load oss nodes in cache protocol smart contract

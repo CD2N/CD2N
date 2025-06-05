@@ -326,8 +326,8 @@ func (rm *RetrieverManager) LoadRetrievers(cli *evm.CacheProtoContract, conf con
 		if node.Endpoint == "" {
 			continue
 		}
-		if !strings.Contains(node.Endpoint, "http://") && strings.Contains(node.Endpoint, "https://") {
-			node.Endpoint = fmt.Sprintf("https://%s", node.Endpoint)
+		if !strings.Contains(node.Endpoint, "http://") && !strings.Contains(node.Endpoint, "https://") {
+			node.Endpoint = fmt.Sprintf("http://%s", node.Endpoint)
 		}
 		node.Available = CheckNodeAvailable(&node)
 		rm.nodes.LoadOrStore(node.Account, node)
