@@ -3,6 +3,8 @@ package chain
 import (
 	"fmt"
 	"math/rand"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	rpc "github.com/centrifuge/go-substrate-rpc-client/v4"
@@ -16,7 +18,8 @@ import (
 )
 
 type Client struct {
-	Rpcs []string
+	Rpcs     []string
+	nonceMap *sync.Map
 	KeyringManager
 	GenesisBlockHash types.Hash
 	RuntimeVersion   *types.RuntimeVersion
@@ -116,7 +119,7 @@ func NewLightCessClient(mnemonic string, rpcs []string) (*Client, error) {
 //	Configured Client instance
 //	Error if any initialization step fails
 func NewClient(opts ...Option) (*Client, error) {
-	client := &Client{}
+	client := &Client{nonceMap: &sync.Map{}}
 	for _, opt := range opts {
 		if err := opt(client); err != nil {
 			return client, errors.Wrap(err, "new cess chain client error")
@@ -241,32 +244,28 @@ func (c *Client) RefreshSubstrateApi(r bool) error {
 //
 //	Block hash containing the transaction
 //	Error if signing, submission, or event decoding fails
-func (c *Client) SubmitExtrinsic(keypair signature.KeyringPair, call types.Call, eventName string, event any, timeout time.Duration) (string, error) {
+func (c *Client) SubmitExtrinsic(caller *signature.KeyringPair, call types.Call, eventName string, event any, timeout time.Duration) (string, error) {
 
 	var (
 		hash string
+		err  error
 	)
+	keypair, err := c.GetCaller(caller)
+	if err != nil {
+		return hash, errors.Wrap(err, "submit extrinsic error")
+	}
+
 	ext := types.NewExtrinsic(call)
-	key, err := types.CreateStorageKey(c.Metadata, "System", "Account", keypair.PublicKey)
+	nonce, err := c.GetCallerNonce(&keypair)
 	if err != nil {
-		return hash, errors.Wrap(fmt.Errorf("create storage key err: %v", err), "submit extrinsic error")
+		c.PutCaller(&keypair)
+		return hash, errors.Wrap(err, "submit extrinsic error")
 	}
-
-	var accountInfo types.AccountInfo
-	ok, err := c.RPC.State.GetStorageLatest(key, &accountInfo)
-	if err != nil {
-		return hash, errors.Wrap(fmt.Errorf("get storage latest err: %v", err), "submit extrinsic error")
-	}
-
-	if !ok {
-		return hash, errors.Wrap(errors.New("get storage latest err: empty error"), "submit extrinsic error")
-	}
-
 	o := types.SignatureOptions{
 		BlockHash:          c.GenesisBlockHash,
 		Era:                types.ExtrinsicEra{IsMortalEra: false},
 		GenesisHash:        c.GenesisBlockHash,
-		Nonce:              types.NewUCompactFromUInt(uint64(accountInfo.Nonce)),
+		Nonce:              types.NewUCompactFromUInt(nonce),
 		SpecVersion:        c.RuntimeVersion.SpecVersion,
 		Tip:                types.NewUCompactFromUInt(0),
 		TransactionVersion: c.RuntimeVersion.TransactionVersion,
@@ -274,11 +273,15 @@ func (c *Client) SubmitExtrinsic(keypair signature.KeyringPair, call types.Call,
 
 	err = ext.Sign(keypair, o)
 	if err != nil {
+		c.PutCaller(&keypair)
 		return hash, errors.Wrap(err, "submit extrinsic error")
 	}
 
+	c.PutCaller(&keypair)
+
 	sub, err := c.RPC.Author.SubmitAndWatchExtrinsic(ext)
 	if err != nil {
+		c.UpdateCallerNonce(&keypair)
 		return hash, errors.Wrap(err, "submit extrinsic error")
 	}
 	defer sub.Unsubscribe()
@@ -312,6 +315,7 @@ func (c *Client) SubmitExtrinsic(keypair signature.KeyringPair, call types.Call,
 			}
 			return hash, nil
 		case err = <-sub.Err():
+			c.UpdateCallerNonce(&keypair)
 			return hash, errors.Wrap(err, "submit extrinsic error")
 		case <-timer.C:
 			return hash, errors.Wrap(errors.New("timeout"), "submit extrinsic error")
@@ -434,6 +438,52 @@ func (c *Client) GetCaller(caller *signature.KeyringPair) (signature.KeyringPair
 		key = *caller
 	}
 	return key, nil
+}
+
+func (c *Client) PutCaller(caller *signature.KeyringPair) {
+	if caller != nil {
+		c.PutKey(caller.Address)
+	}
+}
+
+func (c *Client) GetCallerNonce(caller *signature.KeyringPair) (uint64, error) {
+	if caller == nil {
+		return 0, errors.New("invalid caller")
+	}
+	if v, ok := c.nonceMap.Load(caller.Address); ok {
+		noncer, ok := v.(*atomic.Uint64)
+		if !ok {
+			return 0, errors.New("invalid nonce value")
+		}
+		return noncer.Add(1), nil
+	}
+	if err := c.UpdateCallerNonce(caller); err != nil {
+		return 0, err
+	}
+	return c.GetCallerNonce(caller)
+}
+
+func (c *Client) UpdateCallerNonce(caller *signature.KeyringPair) error {
+	if caller == nil {
+		return errors.New("invalid caller")
+	}
+	var accountInfo types.AccountInfo
+	key, err := types.CreateStorageKey(c.Metadata, "System", "Account", caller.PublicKey)
+	if err != nil {
+		return err
+	}
+	ok, err := c.RPC.State.GetStorageLatest(key, &accountInfo)
+	if err != nil {
+		return err
+	}
+
+	if !ok {
+		return errors.New("failed to get the nonce value on chain")
+	}
+	v := &atomic.Uint64{}
+	v.Add(uint64(accountInfo.Nonce))
+	c.nonceMap.Store(caller.Address, v)
+	return nil
 }
 
 func createPrefixedKey(method, prefix string) []byte {

@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -251,4 +252,10 @@ func CopyFile(src, dist string) error {
 	defer sfile.Close()
 	_, err = io.Copy(dfile, sfile)
 	return err
+}
+
+func GetDataHash(data ...any) []byte {
+	h := sha256.New()
+	h.Write(fmt.Append([]byte{}, data...))
+	return h.Sum(nil)
 }

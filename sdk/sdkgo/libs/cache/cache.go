@@ -220,7 +220,7 @@ func (c *Cache) LoadCacheRecords(fpath string) error {
 }
 
 func (c *Cache) LoadCacheRecordsWithFiles(dir string) error {
-	pool, err := ants.NewPool(16)
+	pool, err := ants.NewPool(8)
 	if err != nil {
 		return errors.Wrap(err, "load cache records error")
 	}

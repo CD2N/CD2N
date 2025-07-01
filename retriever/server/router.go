@@ -49,7 +49,8 @@ func DebugHandle(c *gin.Context) {
 
 func TokenVerify(c *gin.Context) {
 	if strings.Contains(c.Request.RequestURI, "/gentoken") ||
-		strings.Contains(c.Request.RequestURI, "/download") {
+		strings.Contains(c.Request.RequestURI, "/download") ||
+		strings.Contains(c.Request.RequestURI, "/capsule") {
 		c.Next()
 		return
 	}
@@ -125,6 +126,7 @@ func RegisterHandles(router *gin.Engine, h *handles.ServerHandle) {
 
 	gateway := router.Group("/gateway")
 	gateway.Use(TokenVerify)
+	gateway.GET("/capsule/:fid", h.GetPreCapsule)
 	gateway.POST("/gentoken", h.GenToken)
 	gateway.HEAD("/download/:fid/:segment", h.DownloadUserFile)
 	gateway.GET("/download/:fid", h.DownloadUserFile)

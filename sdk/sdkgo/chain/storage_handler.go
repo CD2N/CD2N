@@ -117,13 +117,6 @@ func (c *Client) MintTerritory(name string, gibCount, days uint32, caller *signa
 	if name == "" || gibCount == 0 || days == 0 {
 		return "", errors.Wrap(errors.New("bad args"), "mint territory error")
 	}
-	key, err := c.GetCaller(caller)
-	if err != nil {
-		return "", errors.Wrap(err, "mint territory error")
-	}
-	if caller == nil {
-		defer c.PutKey(key.Address)
-	}
 
 	newcall, err := types.NewCall(
 		c.Metadata, "StorageHandler.mint_territory",
@@ -133,7 +126,7 @@ func (c *Client) MintTerritory(name string, gibCount, days uint32, caller *signa
 		return "", errors.Wrap(err, "mint territory error")
 	}
 
-	blockhash, err := c.SubmitExtrinsic(key, newcall, "StorageHandler.MintTerritory", event, c.Timeout)
+	blockhash, err := c.SubmitExtrinsic(caller, newcall, "StorageHandler.MintTerritory", event, c.Timeout)
 	if err != nil {
 		return "", errors.Wrap(err, "mint territory error")
 	}
@@ -157,13 +150,6 @@ func (c *Client) ExpandingTerritory(name string, gibCount uint32, caller *signat
 	if name == "" || gibCount == 0 {
 		return "", errors.Wrap(errors.New("bad args"), "expanding territory error")
 	}
-	key, err := c.GetCaller(caller)
-	if err != nil {
-		return "", errors.Wrap(err, "expanding territory error")
-	}
-	if caller == nil {
-		defer c.PutKey(key.Address)
-	}
 
 	newcall, err := types.NewCall(
 		c.Metadata, "StorageHandler.expanding_territory",
@@ -173,7 +159,7 @@ func (c *Client) ExpandingTerritory(name string, gibCount uint32, caller *signat
 		return "", errors.Wrap(err, "expanding territory error")
 	}
 
-	blockhash, err := c.SubmitExtrinsic(key, newcall, "StorageHandler.ExpansionTerritory", event, c.Timeout)
+	blockhash, err := c.SubmitExtrinsic(caller, newcall, "StorageHandler.ExpansionTerritory", event, c.Timeout)
 	if err != nil {
 		return "", errors.Wrap(err, "expanding territory error")
 	}
@@ -197,13 +183,6 @@ func (c *Client) RenewalTerritory(name string, days uint32, caller *signature.Ke
 	if name == "" || days == 0 {
 		return "", errors.Wrap(errors.New("bad args"), "renewal territory error")
 	}
-	key, err := c.GetCaller(caller)
-	if err != nil {
-		return "", errors.Wrap(err, "renewal territory error")
-	}
-	if caller == nil {
-		defer c.PutKey(key.Address)
-	}
 
 	newcall, err := types.NewCall(
 		c.Metadata, "StorageHandler.renewal_territory",
@@ -213,7 +192,7 @@ func (c *Client) RenewalTerritory(name string, days uint32, caller *signature.Ke
 		return "", errors.Wrap(err, "renewal territory error")
 	}
 
-	blockhash, err := c.SubmitExtrinsic(key, newcall, "StorageHandler.RenewalTerritory", event, c.Timeout)
+	blockhash, err := c.SubmitExtrinsic(caller, newcall, "StorageHandler.RenewalTerritory", event, c.Timeout)
 	if err != nil {
 		return "", errors.Wrap(err, "renewal territory error")
 	}
@@ -239,13 +218,6 @@ func (c *Client) ReactivateTerritory(name string, days uint32, caller *signature
 	if name == "" || days == 0 {
 		return "", errors.Wrap(errors.New("bad args"), "reactivate territory error")
 	}
-	key, err := c.GetCaller(caller)
-	if err != nil {
-		return "", errors.Wrap(err, "reactivate territory error")
-	}
-	if caller == nil {
-		defer c.PutKey(key.Address)
-	}
 
 	newcall, err := types.NewCall(
 		c.Metadata, "StorageHandler.reactivate_territory",
@@ -255,7 +227,7 @@ func (c *Client) ReactivateTerritory(name string, days uint32, caller *signature
 		return "", errors.Wrap(err, "renewal territory error")
 	}
 
-	blockhash, err := c.SubmitExtrinsic(key, newcall, "StorageHandler.ReactivateTerritory", event, c.Timeout)
+	blockhash, err := c.SubmitExtrinsic(caller, newcall, "StorageHandler.ReactivateTerritory", event, c.Timeout)
 	if err != nil {
 		return "", errors.Wrap(err, "reactivate territory error")
 	}
@@ -281,13 +253,6 @@ func (c *Client) ReactivateTerritory(name string, days uint32, caller *signature
 //	string - The block hash of the transaction.
 //	error - An error if the transaction fails, including encoding errors, key retrieval, extrinsic creation, or submission errors.
 func (c *Client) CreateTerritoryOrder(account []byte, name string, orderType uint8, gibCount, days, expired uint32, caller *signature.KeyringPair, event any) (string, error) {
-	key, err := c.GetCaller(caller)
-	if err != nil {
-		return "", errors.Wrap(err, "create territory order error")
-	}
-	if caller == nil {
-		defer c.PutKey(key.Address)
-	}
 
 	addr, err := types.NewAccountID(account)
 	if err != nil {
@@ -303,7 +268,7 @@ func (c *Client) CreateTerritoryOrder(account []byte, name string, orderType uin
 		return "", errors.Wrap(err, "create territory order error")
 	}
 
-	blockhash, err := c.SubmitExtrinsic(key, newcall, "StorageHandler.CreatePayOrder", event, c.Timeout)
+	blockhash, err := c.SubmitExtrinsic(caller, newcall, "StorageHandler.CreatePayOrder", event, c.Timeout)
 	if err != nil {
 		return "", errors.Wrap(err, "create territory order error")
 	}
@@ -324,19 +289,13 @@ func (c *Client) CreateTerritoryOrder(account []byte, name string, orderType uin
 //	string - The block hash of the transaction.
 //	error - An error if the transaction fails, including encoding errors, key retrieval, extrinsic creation, or submission errors.
 func (c *Client) ExecTerritoryOrder(orderId []byte, caller *signature.KeyringPair, event any) (string, error) {
-	key, err := c.GetCaller(caller)
-	if err != nil {
-		return "", errors.Wrap(err, "exec territory order error")
-	}
-	if caller == nil {
-		defer c.PutKey(key.Address)
-	}
+
 	newcall, err := types.NewCall(c.Metadata, "StorageHandler.exec_order", types.NewBytes(orderId))
 	if err != nil {
 		return "", errors.Wrap(err, "exec territory order error")
 	}
 
-	blockhash, err := c.SubmitExtrinsic(key, newcall, "StorageHandler.PaidOrder", event, c.Timeout)
+	blockhash, err := c.SubmitExtrinsic(caller, newcall, "StorageHandler.PaidOrder", event, c.Timeout)
 	if err != nil {
 		return "", errors.Wrap(err, "exec territory order error")
 	}

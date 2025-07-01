@@ -119,20 +119,12 @@ func (c *Client) QueryUserFileList(accountID []byte, block uint32) ([]UserFileSl
 //	Error if signing, extrinsic creation, or submission fails
 func (c *Client) UploadDeclaration(fid FileHash, segment []SegmentList, user UserBrief, filesize uint64, caller *signature.KeyringPair, event any) (string, error) {
 
-	key, err := c.GetCaller(caller)
-	if err != nil {
-		return "", errors.Wrap(err, "upload file declaration error")
-	}
-	if caller == nil {
-		defer c.PutKey(key.Address)
-	}
-
 	newcall, err := types.NewCall(c.Metadata, "FileBank.upload_declaration", fid, segment, user, types.NewU128(*new(big.Int).SetUint64(filesize)))
 	if err != nil {
 		return "", errors.Wrap(err, "upload file declaration error")
 	}
 
-	blockhash, err := c.SubmitExtrinsic(key, newcall, "FileBank.UploadDeclaration", event, c.Timeout)
+	blockhash, err := c.SubmitExtrinsic(caller, newcall, "FileBank.UploadDeclaration", event, c.Timeout)
 	if err != nil {
 		return blockhash, errors.Wrap(err, "upload file declaration error")
 	}
@@ -153,20 +145,13 @@ func (c *Client) UploadDeclaration(fid FileHash, segment []SegmentList, user Use
 //	Block hash where the transaction was included
 //	Error if signing, extrinsic creation, or submission fails
 func (c *Client) DeleteUserFile(fid FileHash, owner types.AccountID, caller *signature.KeyringPair, event any) (string, error) {
-	key, err := c.GetCaller(caller)
-	if err != nil {
-		return "", errors.Wrap(err, "delete user file error")
-	}
-	if caller == nil {
-		defer c.PutKey(key.Address)
-	}
 
 	newcall, err := types.NewCall(c.Metadata, "FileBank.delete_file", owner, fid)
 	if err != nil {
 		return "", errors.Wrap(err, "delete user file error")
 	}
 
-	blockhash, err := c.SubmitExtrinsic(key, newcall, "FileBank.DeleteFile", event, c.Timeout)
+	blockhash, err := c.SubmitExtrinsic(caller, newcall, "FileBank.DeleteFile", event, c.Timeout)
 	if err != nil {
 		return blockhash, errors.Wrap(err, "delete user file error")
 	}

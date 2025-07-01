@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strconv"
@@ -20,7 +19,6 @@ import (
 	"github.com/CD2N/CD2N/retriever/server/response"
 	"github.com/CD2N/CD2N/retriever/utils"
 	"github.com/CD2N/CD2N/sdk/sdkgo/chain"
-	"github.com/CD2N/CD2N/sdk/sdkgo/libs/buffer"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/tsproto"
 	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
 	"github.com/centrifuge/go-substrate-rpc-client/v4/types"
@@ -89,13 +87,22 @@ func (h *ServerHandle) UploadLocalFile(c *gin.Context) {
 	}
 	async := c.PostForm("async") == "true"
 	noProxy := c.PostForm("noProxy") == "true"
+	encrypt := c.PostForm("encrypt") == "true"
 
 	src, err := os.Open(fpath)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(response.CODE_UP_ERROR, "upload user file error", err.Error()))
 		return
 	}
-	h.uploadFile(c, src, user.Account, territory, filename, async, noProxy)
+	defer src.Close()
+
+	finfo, err := h.gateway.PreprocessFile(h.buffer, src, user.Account, territory, filename, encrypt)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "upload user file error", err.Error()))
+		return
+	}
+
+	h.upload(c, finfo, async, noProxy)
 }
 
 func (h *ServerHandle) UploadUserFileTemp(c *gin.Context) {
@@ -112,6 +119,7 @@ func (h *ServerHandle) UploadUserFileTemp(c *gin.Context) {
 	}
 	async := c.PostForm("async") == "true"
 	noProxy := c.PostForm("noProxy") == "true"
+	encrypt := c.PostForm("encrypt") == "true"
 
 	file, err := c.FormFile("file")
 
@@ -124,7 +132,15 @@ func (h *ServerHandle) UploadUserFileTemp(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "upload user file error", err.Error()))
 		return
 	}
-	h.uploadFile(c, src, pubkey, territory, file.Filename, async, noProxy)
+	defer src.Close()
+
+	finfo, err := h.gateway.PreprocessFile(h.buffer, src, pubkey, territory, file.Filename, encrypt)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "upload user file error", err.Error()))
+		return
+	}
+
+	h.upload(c, finfo, async, noProxy)
 }
 
 func (h *ServerHandle) UploadUserFile(c *gin.Context) {
@@ -145,6 +161,7 @@ func (h *ServerHandle) UploadUserFile(c *gin.Context) {
 	}
 	async := c.PostForm("async") == "true"
 	noProxy := c.PostForm("noProxy") == "true"
+	encrypt := c.PostForm("encrypt") == "true"
 
 	file, err := c.FormFile("file")
 
@@ -157,57 +174,34 @@ func (h *ServerHandle) UploadUserFile(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "upload user file error", err.Error()))
 		return
 	}
-	h.uploadFile(c, src, user.Account, territory, file.Filename, async, noProxy)
+	defer src.Close()
+
+	finfo, err := h.gateway.PreprocessFile(h.buffer, src, user.Account, territory, file.Filename, encrypt)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "upload user file error", err.Error()))
+		return
+	}
+
+	h.upload(c, finfo, async, noProxy)
 }
 
-func (h *ServerHandle) uploadFile(c *gin.Context, file io.Reader, acc []byte, territory, filename string, async, noProxy bool) {
-	if len(filename) > 63 {
-		filename = filename[len(filename)-63:]
-	}
-	tmpName := hex.EncodeToString(utils.CalcSha256Hash(acc, []byte(territory+filename)))
-	fpath, err := h.buffer.NewBufPath(tmpName)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(response.CODE_UP_ERROR, "upload file error", err.Error()))
-		return
-	}
-	err = h.SaveDataToBuf(file, fpath)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(response.CODE_UP_ERROR, "upload  file error", err.Error()))
-		return
-	}
-	st := time.Now()
-	finfo, err := h.gateway.ProcessFile(h.buffer, filename, fpath, territory, acc)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(response.CODE_UP_ERROR, "upload file error", err.Error()))
-		return
-	}
-	logger.GetLogger(config.LOG_GATEWAY).Infof("file %s process time: %v", finfo.Fid, time.Since(st))
-	//logger.GetLogger(config.LOG_GATEWAY).Info("file upload: ", finfo.String())
-
-	cachePath, err := h.gateway.FileCacher.NewBufPath(finfo.Fid)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(response.CODE_UP_ERROR, "upload file error", err.Error()))
-		return
-	}
-	err = os.Rename(fpath, cachePath)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(response.CODE_UP_ERROR, "upload file error", err.Error()))
-		return
-	}
-	h.gateway.FileCacher.AddData(finfo.Fid, buffer.CatNamePath(filename, cachePath))
+func (h *ServerHandle) upload(c *gin.Context, finfo task.FileInfo, async, noProxy bool) {
+	//Precondition Check
+	resp := h.CheckPreconditions(finfo.Fid, finfo.Territory, finfo.Owner, finfo.FileSize)
 	if !async {
-		err = h.gateway.ProvideFile(context.Background(), h.buffer, time.Hour, finfo, false)
+		if resp.Code != response.CODE_UP_SUCCESS {
+			c.JSON(http.StatusBadRequest, resp)
+			return
+		}
+		err := h.gateway.ProvideFile(context.Background(), h.buffer, time.Hour, finfo, false)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, tsproto.NewResponse(response.CODE_UP_ERROR, "upload file error", err.Error()))
 			return
 		}
-		logger.GetLogger(config.LOG_GATEWAY).Infof("file %s create order time: %v", finfo.Fid, time.Since(st))
 		c.JSON(http.StatusOK, tsproto.NewResponse(http.StatusOK, "success", finfo.Fid))
 		return
 	}
 	client.PutData(h.partRecord, config.DB_FINFO_PREFIX+finfo.Fid, task.AsyncFinfoBox{Info: finfo, NonProxy: noProxy})
-	//Precondition Check
-	resp := h.CheckPreconditions(finfo.Fid, territory, acc, finfo.FileSize)
 
 	if resp.Code == response.CODE_UP_ERROR {
 		c.JSON(http.StatusInternalServerError, resp)
@@ -273,6 +267,8 @@ func (h *ServerHandle) UploadFileParts(c *gin.Context) {
 	shadowHash := c.PostForm("shadowhash")
 	async := c.PostForm("async") == "true"
 	noProxy := c.PostForm("noProxy") == "true"
+	encrypt := c.PostForm("encrypt") == "true"
+
 	file, err := c.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "parts upload error", err.Error()))
@@ -370,7 +366,15 @@ func (h *ServerHandle) UploadFileParts(c *gin.Context) {
 	if partsInfo.Archive != "" && partsInfo.DirName != "" {
 		fname = partsInfo.DirName
 	}
-	h.uploadFile(c, f, user.Account, partsInfo.Territory, fname, async, noProxy)
+	defer f.Close()
+
+	finfo, err := h.gateway.PreprocessFile(h.buffer, f, user.Account, partsInfo.Territory, fname, encrypt)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "upload user file error", err.Error()))
+		return
+	}
+
+	h.upload(c, finfo, async, noProxy)
 }
 
 func (h *ServerHandle) RequestPartsUpload(c *gin.Context) {

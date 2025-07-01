@@ -3,6 +3,7 @@ module github.com/CD2N/CD2N/sdk/sdkgo
 go 1.22.10
 
 require (
+	github.com/CESSProject/cess-crypto/gosdk v0.0.0-20250612080638-1885e7005e8a
 	github.com/centrifuge/go-substrate-rpc-client/v4 v4.2.1
 	github.com/ethereum/go-ethereum v1.14.12
 	github.com/panjf2000/ants v1.3.0
@@ -13,7 +14,7 @@ require (
 )
 
 require (
-	github.com/ChainSafe/go-schnorrkel v1.0.0 // indirect
+	github.com/ChainSafe/go-schnorrkel v1.1.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/bits-and-blooms/bitset v1.13.0 // indirect
