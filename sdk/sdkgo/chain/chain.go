@@ -2,6 +2,7 @@ package chain
 
 import (
 	"fmt"
+	"log"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -261,6 +262,7 @@ func (c *Client) SubmitExtrinsic(caller *signature.KeyringPair, call types.Call,
 		c.PutCaller(&keypair)
 		return hash, errors.Wrap(err, "submit extrinsic error")
 	}
+	log.Println("nonce", nonce)
 	o := types.SignatureOptions{
 		BlockHash:          c.GenesisBlockHash,
 		Era:                types.ExtrinsicEra{IsMortalEra: false},
@@ -318,6 +320,7 @@ func (c *Client) SubmitExtrinsic(caller *signature.KeyringPair, call types.Call,
 			c.UpdateCallerNonce(&keypair)
 			return hash, errors.Wrap(err, "submit extrinsic error")
 		case <-timer.C:
+			c.UpdateCallerNonce(&keypair)
 			return hash, errors.Wrap(errors.New("timeout"), "submit extrinsic error")
 		}
 	}
@@ -481,7 +484,7 @@ func (c *Client) UpdateCallerNonce(caller *signature.KeyringPair) error {
 		return errors.New("failed to get the nonce value on chain")
 	}
 	v := &atomic.Uint64{}
-	v.Add(uint64(accountInfo.Nonce))
+	v.Store(uint64(accountInfo.Nonce))
 	c.nonceMap.Store(caller.Address, v)
 	return nil
 }

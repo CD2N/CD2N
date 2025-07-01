@@ -3,7 +3,7 @@ module github.com/CD2N/CD2N/retriever
 go 1.23.0
 
 require (
-	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250701081219-fad35b5775b2
+	github.com/jiuquxzy/CD2N/sdk/sdkgo v0.0.0-20250701081219-fad35b5775b2
 	github.com/CESSProject/cess-crypto/gosdk v0.0.0-20250612080638-1885e7005e8a
 	github.com/bits-and-blooms/bloom/v3 v3.7.0
 	github.com/decred/base58 v1.0.5
