@@ -458,7 +458,7 @@ func (c *Client) GetCallerNonce(caller *signature.KeyringPair) (uint64, error) {
 		if !ok {
 			return 0, errors.New("invalid nonce value")
 		}
-		return noncer.Add(1), nil
+		return noncer.Add(1) - 1, nil
 	}
 	if err := c.UpdateCallerNonce(caller); err != nil {
 		return 0, err
@@ -483,9 +483,12 @@ func (c *Client) UpdateCallerNonce(caller *signature.KeyringPair) error {
 	if !ok {
 		return errors.New("failed to get the nonce value on chain")
 	}
-	v := &atomic.Uint64{}
+	act, _ := c.nonceMap.LoadOrStore(caller.Address, &atomic.Uint64{})
+	v, ok := act.(*atomic.Uint64)
+	if !ok {
+		errors.New("invalid nonce value")
+	}
 	v.Store(uint64(accountInfo.Nonce))
-	c.nonceMap.Store(caller.Address, v)
 	return nil
 }
 
