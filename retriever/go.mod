@@ -2,8 +2,10 @@ module github.com/CD2N/CD2N/retriever
 
 go 1.23.0
 
+//replace github.com/CD2N/CD2N/sdk/sdkgo => github.com/jiuquxzy/CD2N/sdk/sdkgo v0.0.0-20250701084916-0131ee75d9ac
+
 require (
-	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250527092815-fcb0fc755f3a
+	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250701081219-fad35b5775b2
 	github.com/CESSProject/cess-crypto/gosdk v0.0.0-20250612080638-1885e7005e8a
 	github.com/bits-and-blooms/bloom/v3 v3.7.0
 	github.com/decred/base58 v1.0.5
@@ -46,7 +48,7 @@ require (
 )
 
 require (
-	github.com/ChainSafe/go-schnorrkel v1.1.0 // indirect
+	github.com/ChainSafe/go-schnorrkel v1.1.0
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/alecthomas/units v0.0.0-20240626203959-61d1e3462e30 // indirect
 	github.com/bits-and-blooms/bitset v1.17.0 // indirect
@@ -86,7 +88,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/gtank/merlin v0.1.1 // indirect
-	github.com/gtank/ristretto255 v0.1.2 // indirect
+	github.com/gtank/ristretto255 v0.1.2
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
