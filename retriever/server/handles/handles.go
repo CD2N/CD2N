@@ -396,3 +396,19 @@ func (h *ServerHandle) GetNodeInfo(c *gin.Context) {
 			},
 		}))
 }
+
+func (h *ServerHandle) GetPreCapsule(c *gin.Context) {
+	fid := c.Param("fid")
+	capsule, pubkey, err := h.gateway.GetCapsule(fid)
+	if err != nil {
+		c.JSON(http.StatusBadRequest,
+			tsproto.NewResponse(http.StatusBadRequest, "get proxy re-encryption capsule error", err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK,
+		tsproto.NewResponse(http.StatusOK, "success", map[string]any{
+			"capsule": capsule,
+			"pubkey":  pubkey[:],
+		}),
+	)
+}

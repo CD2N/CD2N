@@ -7,6 +7,16 @@ import (
 	"github.com/pkg/errors"
 )
 
+// QueryDealMap queries the completed segment indices of a file's storage deals from the blockchain.
+// Parameters:
+//
+//	cli - The blockchain client instance for interacting with the chain.
+//	fid - The unique file identifier string.
+//
+// Returns:
+//
+//	map[int]struct{} - A set of completed segment indices.
+//	error - An error if the query fails, including underlying blockchain query errors.
 func QueryDealMap(cli *chain.Client, fid string) (map[int]struct{}, error) {
 	cmpSet := make(map[int]struct{})
 	order, err := cli.QueryDealMap(fid, 0)
@@ -19,6 +29,18 @@ func QueryDealMap(cli *chain.Client, fid string) (map[int]struct{}, error) {
 	return cmpSet, nil
 }
 
+// CreateStorageOrder creates a storage order on the blockchain for a file.
+// Parameters:
+//
+//	cli - The blockchain client instance for submitting the order.
+//	info - Struct containing file details (fragments, owner, name, territory, size).
+//	caller - The keyring pair for signing the transaction.
+//	event - Event handler for processing transaction events.
+//
+// Returns:
+//
+//	string - The transaction block hash.
+//	error - An error if the order creation fails, including encoding errors or transaction submission failures.
 func CreateStorageOrder(cli *chain.Client, info FileInfo, caller *signature.KeyringPair, event any) (string, error) {
 	var (
 		segments []chain.SegmentList
@@ -48,6 +70,14 @@ func CreateStorageOrder(cli *chain.Client, info FileInfo, caller *signature.Keyr
 	return hash, nil
 }
 
+// getFileHash converts a file ID string into the blockchain's defined FileHash type.
+// Parameters:
+//
+//	fid - The input file ID string to convert.
+//
+// Returns:
+//
+//	chain.FileHash - The converted hash value compatible with the blockchain's data structure.
 func getFileHash(fid string) chain.FileHash {
 	var hash chain.FileHash
 	for i := 0; i < len(fid) && i < len(hash); i++ {

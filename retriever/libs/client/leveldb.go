@@ -61,6 +61,14 @@ func GetData(db *leveldb.DB, key string, value any) error {
 	return nil
 }
 
+func GetBytes(db *leveldb.DB, key string) ([]byte, error) {
+	data, err := db.Get([]byte(key), nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "get bytes data from leveldb error")
+	}
+	return data, nil
+}
+
 func PutData(db *leveldb.DB, key string, value any) error {
 	jbytes, err := json.Marshal(value)
 	if err != nil {
@@ -69,6 +77,14 @@ func PutData(db *leveldb.DB, key string, value any) error {
 	err = db.Put([]byte(key), jbytes, nil)
 	if err != nil {
 		return errors.Wrap(err, "put data to leveldb error")
+	}
+	return nil
+}
+
+func PutBytes(db *leveldb.DB, key string, data []byte) error {
+	err := db.Put([]byte(key), data, nil)
+	if err != nil {
+		return errors.Wrap(err, "put bytes data to leveldb error")
 	}
 	return nil
 }

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/CD2N/CD2N/retriever/config"
+	"github.com/CD2N/CD2N/retriever/gateway"
 	"github.com/CD2N/CD2N/retriever/node"
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/tsproto"
 	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
@@ -27,7 +28,7 @@ func (h *ServerHandle) QueryData(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "query data error", "bad query params"))
 		return
 	}
-	fpaths, _ := h.GetDataFromDiskBuffer(did)
+	fpaths, _ := gateway.GetDataFromDiskBuffer(h.buffer, did)
 	c.JSON(http.StatusOK, tsproto.NewResponse(http.StatusOK, "success", len(fpaths) > 0))
 }
 
@@ -49,7 +50,7 @@ func (h *ServerHandle) FetchCacheData(c *gin.Context) {
 		return
 	}
 
-	fpaths, _ := h.GetDataFromDiskBuffer(req.Did)
+	fpaths, _ := gateway.GetDataFromDiskBuffer(h.buffer, req.Did)
 	if len(fpaths) <= 0 {
 		task := node.NewCesRetrieveTask(cessCli, req.UserAddr, req.ExtData, "", []string{req.Did})
 		fpaths, err = h.retr.RetrieveData(
@@ -156,21 +157,6 @@ func (h *ServerHandle) QueryCacheCap(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, tsproto.NewResponse(http.StatusOK, "success", ccap))
 }
-
-// func (h *ServerHandle) CheckCacheOrder(c *gin.Context) {
-// 	var req tsproto.TeeReq
-// 	err := c.BindJSON(&req)
-// 	if err != nil {
-// 		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "check cache order error", "bad request params"))
-// 		return
-// 	}
-// 	u, _ := url.JoinPath(h.teeEndpoint, "order", "recharge")
-// 	if err = tsproto.RechargeCapacity(u, req.UserAcc, [32]byte(req.OrderId)); err != nil {
-// 		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "check cache order error", err.Error()))
-// 		return
-// 	}
-// 	c.JSON(http.StatusOK, tsproto.NewResponse(http.StatusOK, "success", nil))
-// }
 
 func (h *ServerHandle) SaveFileToBuf(file *multipart.FileHeader, fpath string) error {
 	src, err := file.Open()

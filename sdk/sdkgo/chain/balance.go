@@ -8,14 +8,20 @@ import (
 	"github.com/pkg/errors"
 )
 
+// TransferToken transfers tokens from the caller's account to the destination account.
+// It ensures the caller's account remains alive (non-zero balance after transfer).
+// Parameters:
+//
+//	dest - The destination account address (SS58 format string)
+//	amount - The amount of tokens to transfer, ("1000000000000000000" represents 1 CESS token).
+//	caller - The keyring pair of the transaction signer
+//	event - A pointer to an event structure that will be populated if the transaction is successful
+//
+// Returns:
+//
+//	Block hash of the transaction
+//	Error if the transfer fails (e.g., invalid address, insufficient balance)
 func (c *Client) TransferToken(dest string, amount string, caller *signature.KeyringPair, event any) (string, error) {
-	key, err := c.GetCaller(caller)
-	if err != nil {
-		return "", errors.Wrap(err, "exec territory order error")
-	}
-	if caller == nil {
-		defer c.PutKey(key.Address)
-	}
 
 	pubkey, err := ParsingPublickey(dest)
 	if err != nil {
@@ -37,7 +43,7 @@ func (c *Client) TransferToken(dest string, amount string, caller *signature.Key
 		return "", errors.Wrap(err, "transfer token error")
 	}
 
-	blockhash, err := c.SubmitExtrinsic(key, newcall, "Balances.Transfer", event, c.Timeout)
+	blockhash, err := c.SubmitExtrinsic(caller, newcall, "Balances.Transfer", event, c.Timeout)
 	if err != nil {
 		return blockhash, errors.Wrap(err, "transfer token error")
 	}

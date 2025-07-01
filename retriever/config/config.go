@@ -76,7 +76,7 @@ const (
 	DEFAULT_GASFREECAP         = 108694000460
 	DEFAULT_GASLIMIT           = 30000000
 	DEFAULT_CHAINID            = 11330
-	VERSION="0.8.1"
+	VERSION                    = "0.8.1"
 )
 
 const (
@@ -95,11 +95,11 @@ const (
 	CONF_DIR          = "conf"
 
 	TASKDB_NAME   = "task_record"
-	CIDMAPDB_NAME = "cid_record"
 
 	DB_SEGMENT_PREFIX  = "segment-"
 	DB_FILEPART_PREFIX = "filepart-"
 	DB_FINFO_PREFIX    = "fileinfo-"
+	DB_CAPSULE_PREFIX  = "capsule-"
 )
 
 var conf *Config

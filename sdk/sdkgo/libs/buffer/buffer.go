@@ -33,9 +33,8 @@ func NewFileBuffer(limitSize uint64, dir string) (*FileBuffer, error) {
 			os.Remove(i.Value)
 		}
 	})
-	if err := c.LoadCacheRecords(filepath.Join(dir, METADATA)); err != nil {
-		c.LoadCacheRecordsWithFiles(dir) //
-	}
+	c.LoadCacheRecords(filepath.Join(dir, METADATA))
+	go c.LoadCacheRecordsWithFiles(dir)
 
 	update := &atomic.Value{}
 	update.Store(time.Now())
@@ -106,14 +105,14 @@ func (b *FileBuffer) GetData(key string) cache.Item {
 
 func (b *FileBuffer) RemoveData(fpath string) error {
 	b.cacher.RemoveItem(filepath.Base(fpath))
-	if err := os.Remove(fpath); err != nil {
-		return errors.Wrap(err, "remove file buffer error")
-	}
 	b.unserialized.Add(1)
 	if b.unserialized.Load() >= SERIALIZED_LIMIT || time.Since(b.updateAt.Load().(time.Time)) >= UPDATE_TIME {
 		b.updateAt.Store(time.Now())
 		b.cacher.SaveCacheRecords(filepath.Join(b.bufDir, METADATA))
 		b.unserialized.Store(0)
+	}
+	if err := os.Remove(fpath); err != nil {
+		return errors.Wrap(err, "remove file buffer error")
 	}
 	return nil
 }
