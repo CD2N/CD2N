@@ -2,7 +2,7 @@ module github.com/CD2N/CD2N/retriever
 
 go 1.23.0
 
-replace github.com/CD2N/CD2N/sdk/sdkgo => github.com/jiuquxzy/CD2N/sdk/sdkgo v0.0.0-20250701084916-0131ee75d9ac
+//replace github.com/CD2N/CD2N/sdk/sdkgo => github.com/jiuquxzy/CD2N/sdk/sdkgo v0.0.0-20250701084916-0131ee75d9ac
 
 require (
 	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250701081219-fad35b5775b2

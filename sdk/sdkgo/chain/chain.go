@@ -2,7 +2,6 @@ package chain
 
 import (
 	"fmt"
-	"log"
 	"math/rand"
 	"sync"
 	"sync/atomic"
@@ -262,7 +261,7 @@ func (c *Client) SubmitExtrinsic(caller *signature.KeyringPair, call types.Call,
 		c.PutCaller(&keypair)
 		return hash, errors.Wrap(err, "submit extrinsic error")
 	}
-	log.Println("nonce", nonce)
+
 	o := types.SignatureOptions{
 		BlockHash:          c.GenesisBlockHash,
 		Era:                types.ExtrinsicEra{IsMortalEra: false},
