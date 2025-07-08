@@ -35,6 +35,10 @@ type FileResponse struct {
 	Token     string   `json:"token"`
 }
 
+type Statistics interface {
+	StatTimes(id string)
+}
+
 func (g *Gateway) ProvideFile(ctx context.Context, buffer *buffer.FileBuffer, exp time.Duration, info task.FileInfo, nonProxy bool) error {
 	if _, ok := g.pstats.Fids.LoadOrStore(info.Fid, struct{}{}); ok {
 		return errors.Wrap(errors.New("file is being processed"), "provide file error")
@@ -201,12 +205,12 @@ func (g *Gateway) FetchFile(ctx context.Context, fid, did, token string) (string
 	return fpath, nil
 }
 
-func (g *Gateway) ProvideTaskChecker(ctx context.Context, buffer *buffer.FileBuffer) error {
+func (g *Gateway) ProvideTaskChecker(ctx context.Context, buffer *buffer.FileBuffer,stat Statistics) error {
 	ticker := time.NewTicker(task.PROVIDE_TASK_CHECK_TIME)
 	for {
 		select {
 		case <-ticker.C:
-			if err := g.checker(ctx, buffer); err != nil {
+			if err := g.checker(ctx, buffer,stat); err != nil {
 				logger.GetLogger(config.LOG_PROVIDER).Error(err)
 			}
 		case <-ctx.Done():
@@ -215,7 +219,7 @@ func (g *Gateway) ProvideTaskChecker(ctx context.Context, buffer *buffer.FileBuf
 	}
 }
 
-func (g *Gateway) checker(ctx context.Context, buffer *buffer.FileBuffer) error {
+func (g *Gateway) checker(ctx context.Context, buffer *buffer.FileBuffer, stat Statistics) error {
 	err := client.DbIterator(g.taskRecord,
 		func(key []byte) error {
 			select {
@@ -268,6 +272,9 @@ func (g *Gateway) checker(ctx context.Context, buffer *buffer.FileBuffer) error 
 						continue
 					}
 					if time.Since(upt) >= task.PROVIDE_TASK_CHECK_TIME*2 {
+						if stat != nil {
+							stat.StatTimes(v.Claimant)
+						}
 						logger.GetLogger(config.LOG_PROVIDER).Infof("remove subtask %d of file %s, timeout!", v.GroupId+1, fid)
 						ftask.DelSubTask(v.GroupId)
 						delete(ftask.SubTasks, k)

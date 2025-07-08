@@ -266,7 +266,7 @@ func (rm *RetrieverManager) UpdateRetriever(key string, node Retriever) {
 }
 
 func (rm *RetrieverManager) LoadRetrievers(cli *evm.CacheProtoContract, conf config.Config) error {
-	for _, cdn := range conf.CdnNodes {
+	for _, cdn := range conf.Retrievers {
 		if cdn.Account == "" || cdn.Endpoint == "" {
 			continue
 		}

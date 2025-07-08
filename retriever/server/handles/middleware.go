@@ -30,11 +30,13 @@ type retreqCounter struct {
 }
 
 type AccessController struct {
-	retReqs       *sync.Map
-	lock          *sync.RWMutex
-	bucket        *ratelimit.Bucket
-	window        time.Duration
-	bufer, cacher *buffer.FileBuffer
+	retReqs           *sync.Map
+	lock              *sync.RWMutex
+	retrievalBucket   *ratelimit.Bucket
+	provideDataBucket *ratelimit.Bucket
+	claimDataBucket   *ratelimit.Bucket
+	window            time.Duration
+	bufer, cacher     *buffer.FileBuffer
 }
 
 func NewAccessController(window time.Duration, buffer, cacher *buffer.FileBuffer) *AccessController {
@@ -42,9 +44,11 @@ func NewAccessController(window time.Duration, buffer, cacher *buffer.FileBuffer
 		window = time.Minute
 	}
 	return &AccessController{
-		retReqs: &sync.Map{},
-		lock:    &sync.RWMutex{},
-		bucket:  ratelimit.NewBucket(time.Millisecond, 1000),
+		retReqs:           &sync.Map{},
+		lock:              &sync.RWMutex{},
+		retrievalBucket:   ratelimit.NewBucket(time.Millisecond, 1024),
+		provideDataBucket: ratelimit.NewBucket(time.Millisecond, 512),
+		claimDataBucket:   ratelimit.NewBucket(time.Millisecond, 512),
 	}
 }
 
@@ -73,8 +77,16 @@ func (ac *AccessController) UpdateRequestCounter(user, did string) int32 {
 	return counter.Count.Load()
 }
 
-func (ac *AccessController) GetAccessToken() bool {
-	return ac.bucket.TakeAvailable(1) >= 1
+func (ac *AccessController) GetRetrievalToken() bool {
+	return ac.retrievalBucket.TakeAvailable(1) >= 1
+}
+
+func (ac *AccessController) GetProvideToken() bool {
+	return ac.provideDataBucket.TakeAvailable(1) >= 1
+}
+
+func (ac *AccessController) GetClaimToken() bool {
+	return ac.claimDataBucket.TakeAvailable(1) >= 1
 }
 
 func (ac *AccessController) BackFetchFilterFactory() Filter {
@@ -134,9 +146,9 @@ func (ac *AccessController) BoradcastFilterFactory() Filter {
 	}
 }
 
-func (ac *AccessController) RetrieveLimitMiddleware() gin.HandlerFunc {
+func (ac *AccessController) RetrievalLimitMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !ac.GetAccessToken() {
+		if !ac.GetRetrievalToken() {
 			c.AbortWithStatusJSON(429, tsproto.NewResponse(429, "The system is busy, please try again later", nil))
 			return
 		}
@@ -151,6 +163,26 @@ func (ac *AccessController) RetrieveLimitMiddleware() gin.HandlerFunc {
 		}
 		if ac.UpdateRequestCounter(req.UserAddr, did) >= RETRIEVER_LIMIT {
 			c.AbortWithStatusJSON(429, tsproto.NewResponse(429, "Too many requests", nil))
+			return
+		}
+		c.Next()
+	}
+}
+
+func (ac *AccessController) ProvideDataLimitMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !ac.GetProvideToken() {
+			c.AbortWithStatusJSON(429, tsproto.NewResponse(429, "The system is busy, please try again later", nil))
+			return
+		}
+		c.Next()
+	}
+}
+
+func (ac *AccessController) ClaimDataLimitMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !ac.GetClaimToken() {
+			c.AbortWithStatusJSON(429, tsproto.NewResponse(429, "The system is busy, please try again later", nil))
 			return
 		}
 		c.Next()

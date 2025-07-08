@@ -3,6 +3,7 @@ package chain
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -62,6 +63,7 @@ func OptionWithAccounts(mnemonics []string) Option {
 			if err != nil {
 				return err
 			}
+			c.UpdateCallerNonce(&key)
 			keys = append(keys, key)
 		}
 		c.KeyringManager = NewKeyrings(keys...)
@@ -286,6 +288,11 @@ func (c *Client) SubmitExtrinsic(caller *signature.KeyringPair, call types.Call,
 		return hash, errors.Wrap(err, "submit extrinsic error")
 	}
 	defer sub.Unsubscribe()
+	defer func() {
+		if err != nil && strings.Contains(err.Error(), "") {
+			c.UpdateCallerNonce(&keypair)
+		}
+	}()
 
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
@@ -316,10 +323,8 @@ func (c *Client) SubmitExtrinsic(caller *signature.KeyringPair, call types.Call,
 			}
 			return hash, nil
 		case err = <-sub.Err():
-			c.UpdateCallerNonce(&keypair)
 			return hash, errors.Wrap(err, "submit extrinsic error")
 		case <-timer.C:
-			c.UpdateCallerNonce(&keypair)
 			return hash, errors.Wrap(errors.New("timeout"), "submit extrinsic error")
 		}
 	}

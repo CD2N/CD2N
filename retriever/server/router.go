@@ -50,7 +50,8 @@ func DebugHandle(c *gin.Context) {
 func TokenVerify(c *gin.Context) {
 	if strings.Contains(c.Request.RequestURI, "/gentoken") ||
 		strings.Contains(c.Request.RequestURI, "/download") ||
-		strings.Contains(c.Request.RequestURI, "/capsule") {
+		strings.Contains(c.Request.RequestURI, "/capsule") ||
+		strings.Contains(c.Request.RequestURI, "/reencrypt") {
 		c.Next()
 		return
 	}
@@ -115,18 +116,19 @@ func RegisterHandles(router *gin.Engine, h *handles.ServerHandle) {
 	router.GET("/capacity/:addr", h.QueryCacheCap)
 	router.GET("/querydata/:did", h.QueryData)
 
-	router.POST("/cache-fetch", h.Ac.RetrieveLimitMiddleware(), h.FetchCacheData)
-	router.POST("/provide", h.ProvideData)
+	router.POST("/cache-fetch", h.Ac.RetrievalLimitMiddleware(), h.FetchCacheData)
+	router.POST("/provide", h.Ac.ProvideDataLimitMiddleware(), h.ProvideData)
 	conf := config.GetConfig()
 	if !conf.LaunchGateway {
 		return
 	}
-	router.POST("/claim", h.ClaimFile)
+	router.POST("/claim", h.Ac.ClaimDataLimitMiddleware(), h.ClaimFile)
 	router.GET("/fetch", h.FetchFile)
 
 	gateway := router.Group("/gateway")
 	gateway.Use(TokenVerify)
 	gateway.GET("/capsule/:fid", h.GetPreCapsule)
+	gateway.POST("/reencrypt", h.ReEncryptKey)
 	gateway.POST("/gentoken", h.GenToken)
 	gateway.HEAD("/download/:fid/:segment", h.DownloadUserFile)
 	gateway.GET("/download/:fid", h.DownloadUserFile)

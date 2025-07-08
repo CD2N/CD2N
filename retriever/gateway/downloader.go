@@ -76,19 +76,6 @@ func (g *Gateway) GetFileName(fid string) (string, error) {
 	return fname, nil
 }
 
-func (g *Gateway) DecryptData(info *DataInfo, capsule, rkb, pkX []byte, dpath string) error {
-
-	if err := g.cm.DecryptFile(info.Fid, info.Path, dpath, capsule, rkb, pkX); err != nil {
-		return errors.Wrap(err, "decrypt data error")
-	}
-	info.DecryptedFilePath = dpath
-	return nil
-}
-
-func (g *Gateway) GetCapsule(did string) ([]byte, [32]byte, error) {
-	return g.cm.GetCapsule(did)
-}
-
 func (g *Gateway) DownloadData(ctx context.Context, b *buffer.FileBuffer, rr *node.ResourceRetriever, fid, segment, dataRange string) (DataInfo, error) {
 	var (
 		info DataInfo = DataInfo{Fid: fid, Name: "Unknow"}

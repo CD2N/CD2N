@@ -25,14 +25,13 @@ func (h *ServerHandle) ClaimFile(c *gin.Context) {
 		return
 	}
 	addr := crypto.PubkeyToAddress(*key).Hex()
-
+	h.partners.SaveOrUpdateCacher(req.Pubkey, c.ClientIP(), req.StorageNodes)
 	resp, err := h.gateway.ClaimFile(context.Background(), req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "claim file error", err.Error()))
 		return
 	}
 	h.partners.UpdateCacherToken(resp.Token, addr)
-	h.partners.SaveOrUpdateCacher(req.Pubkey, c.ClientIP(), req.StorageNodes)
 	logger.GetLogger(config.LOG_PROVIDER).Infof("L2 Node %s claim fragments from file %s  success.", resp.Token, resp.Fid)
 	c.JSON(http.StatusOK, tsproto.NewResponse(http.StatusOK, "success", resp))
 }

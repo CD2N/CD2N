@@ -34,7 +34,7 @@ type Config struct {
 	ProtoContract   string   `json:"proto_contract"`
 	Staking         string   `json:"staking"`
 	MinerConfigPath string   `json:"miner_config_path"`
-	CdnNodes        []Node   `json:"cdn_nodes"`
+	Retrievers        []Node   `json:"retrievers"`
 	StorageNodes    []Node   `json:"storage_nodes"`
 	GasFreeCap      int64
 	GasLimit        uint64

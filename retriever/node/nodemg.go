@@ -25,6 +25,14 @@ import (
 // 	Endpoint string `json:"endpoint"`
 // }
 
+const (
+	MAX_CACHER_NUM = 768
+)
+
+type FailureCounter func(string)
+
+func (fc FailureCounter) StatTimes(id string) { fc(id) }
+
 type RetrieverInfo struct {
 	Address  string `json:"account"`
 	ExtIp    string `json:"ext_ip"`
@@ -49,14 +57,15 @@ type Retriever struct {
 }
 
 type Cacher struct {
-	Account      string                         `json:"account"`
-	ExtIp        string                         `json:"ext_ip"`
-	StorageNodes map[string]tsproto.StorageNode `json:"storage_nodes"`
-	AccessOn     time.Time                      `json:"access_on"`
-	DistTimes    uint64                         `json:"dist_times"`
-	DistSucTimes uint64                         `json:"dist_suc_times"`
-	RetrTimes    uint64                         `json:"retr_times"`
-	RetrSucTimes uint64                         `json:"retr_suc_times"`
+	Account         string                         `json:"account"`
+	ExtIp           string                         `json:"ext_ip"`
+	StorageNodes    map[string]tsproto.StorageNode `json:"storage_nodes"`
+	AccessOn        time.Time                      `json:"access_on"`
+	DistTimes       uint64                         `json:"dist_times"`
+	DistSucTimes    uint64                         `json:"dist_suc_times"`
+	DistFailedTimes uint64                         `json:"dist_failed_times"`
+	RetrTimes       uint64                         `json:"retr_times"`
+	RetrSucTimes    uint64                         `json:"retr_suc_times"`
 }
 
 type NodeManager struct {
@@ -66,6 +75,7 @@ type NodeManager struct {
 	activeCachers           map[string]Cacher
 	activeStorageNodeFilter *bloom.BloomFilter
 	activeStorageNodes      *atomic.Int32
+	cacherNum               *atomic.Int32
 	lock                    *sync.RWMutex
 }
 
@@ -75,6 +85,7 @@ func NewNodeManager(contract *evm.CacheProtoContract) *NodeManager {
 		peerRetrievers:          map[string]Retriever{},
 		activeCachers:           map[string]Cacher{},
 		activeStorageNodes:      &atomic.Int32{},
+		cacherNum:               &atomic.Int32{},
 		activeStorageNodeFilter: bloom.NewWithEstimates(10000, 0.01),
 		lock:                    &sync.RWMutex{},
 		tokenMap:                &sync.Map{},
@@ -174,9 +185,26 @@ func (nm *NodeManager) SaveOrUpdateRetriever(info RetrieverInfo, storageNodes []
 	nm.peerRetrievers[info.Address] = retriever
 }
 
+func (nm *NodeManager) updateCachers() {
+	nm.lock.Lock()
+	defer nm.lock.Unlock()
+	for key, cacher := range nm.activeCachers {
+		if cacher.DistFailedTimes*100/(cacher.DistTimes+1) >= 60 {
+			delete(nm.activeCachers, key)
+			nm.activeStorageNodes.Add(-int32(len(cacher.StorageNodes)))
+		}
+	}
+}
+
 func (nm *NodeManager) SaveOrUpdateCacher(pubkey []byte, extIp string, storageNodes []tsproto.StorageNode) error {
+	nm.updateCachers()
+
 	if len(pubkey) == 0 || extIp == "" || len(storageNodes) == 0 {
 		return nil
+	}
+
+	if nm.cacherNum.Load() >= MAX_CACHER_NUM {
+		return errors.Wrap(errors.New("cacher queue is full"), "save or update cacher error")
 	}
 
 	key, err := crypto.DecompressPubkey(pubkey)
@@ -221,6 +249,17 @@ func (nm *NodeManager) CacherDistribution(addr string, success bool) {
 	} else {
 		cacher.DistTimes++
 	}
+	nm.activeCachers[addr] = cacher
+}
+
+func (nm *NodeManager) CacherDistFailed(addr string) {
+	nm.lock.Lock()
+	defer nm.lock.Unlock()
+	cacher, ok := nm.activeCachers[addr]
+	if !ok {
+		return
+	}
+	cacher.DistFailedTimes++
 	nm.activeCachers[addr] = cacher
 }
 

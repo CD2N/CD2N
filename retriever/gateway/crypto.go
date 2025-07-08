@@ -217,3 +217,30 @@ func (cm *CryptoModule) DecryptReKey(pkX [32]byte, newCapsule *gosdk.Capsule) ([
 	}
 	return key, nil
 }
+
+// implant for gateway
+
+func (g *Gateway) DecryptData(info *DataInfo, capsule, rkb, pkX []byte, dpath string) error {
+
+	if err := g.cm.DecryptFile(info.Fid, info.Path, dpath, capsule, rkb, pkX); err != nil {
+		return errors.Wrap(err, "decrypt data error")
+	}
+	info.DecryptedFilePath = dpath
+	return nil
+}
+
+func (g *Gateway) GetCapsule(did string) ([]byte, [32]byte, error) {
+	return g.cm.GetCapsule(did)
+}
+
+func (g *Gateway) ReEncryptKey(did string, capsule, rkb []byte) ([]byte, error) {
+	newCapsule, err := g.cm.ReEncryptKey(did, capsule, rkb)
+	if err != nil {
+		return nil, errors.Wrap(err, "re-encrypt key error")
+	}
+	jbytes, err := json.Marshal(newCapsule)
+	if err != nil {
+		return nil, errors.Wrap(err, "re-encrypt key error")
+	}
+	return jbytes, nil
+}
