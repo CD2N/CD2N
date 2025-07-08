@@ -210,7 +210,7 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 	}
 
 	go func() {
-		err := h.gateway.ProvideTaskChecker(ctx, h.buffer)
+		err := h.gateway.ProvideTaskChecker(ctx, h.buffer, node.FailureCounter(h.partners.CacherDistFailed))
 		if err != nil {
 			log.Fatal("run providing task checker error", err)
 		}
@@ -411,4 +411,25 @@ func (h *ServerHandle) GetPreCapsule(c *gin.Context) {
 			"pubkey":  pubkey[:],
 		}),
 	)
+}
+
+type ReencryptReq struct {
+	Did     string `json:"did"`
+	Capsule []byte `json:"capsule"`
+	Rk      []byte `json:"rk"`
+}
+
+func (h *ServerHandle) ReEncryptKey(c *gin.Context) {
+	var req ReencryptReq
+	err := c.BindJSON(&req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "re-encrypt key error", "bad request params"))
+		return
+	}
+	newCapsule, err := h.gateway.ReEncryptKey(req.Did, req.Capsule, req.Rk)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "re-encrypt key error", err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, tsproto.NewResponse(http.StatusOK, "success", newCapsule))
 }

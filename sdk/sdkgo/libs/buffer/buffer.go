@@ -34,7 +34,7 @@ func NewFileBuffer(limitSize uint64, dir string) (*FileBuffer, error) {
 		}
 	})
 	c.LoadCacheRecords(filepath.Join(dir, METADATA))
-	go c.LoadCacheRecordsWithFiles(dir)
+	//go c.LoadCacheRecordsWithFiles(dir)
 
 	update := &atomic.Value{}
 	update.Store(time.Now())

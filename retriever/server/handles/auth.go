@@ -61,9 +61,7 @@ func (h *ServerHandle) GenToken(c *gin.Context) {
 }
 
 func ParsingAndVerifyPublickey(acc, message, sign string) ([]byte, error) {
-	if strings.HasPrefix(sign, "0x") {
-		sign = sign[2:]
-	}
+	sign = strings.TrimPrefix(sign, "0x")
 	signBytes, err := hex.DecodeString(sign)
 	if err != nil {
 		return nil, errors.Wrap(err, "parsing and verifying account error")
@@ -91,7 +89,8 @@ func ParsingAndVerifyPublickey(acc, message, sign string) ([]byte, error) {
 			return nil, errors.Wrap(err, "parsing and verifying account error")
 		}
 		parsedAcc := crypto.PubkeyToAddress(*pubkey).Hex()
-		if strings.ToLower(parsedAcc) != strings.ToLower(acc) {
+
+		if strings.EqualFold(parsedAcc, acc) {
 			return nil, errors.Wrap(errors.New("verify sign error"), "parsing and verifying account error")
 		}
 		return ConvertPubkey(parsedAcc), nil
