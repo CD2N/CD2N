@@ -63,7 +63,6 @@ func OptionWithAccounts(mnemonics []string) Option {
 			if err != nil {
 				return err
 			}
-			c.UpdateCallerNonce(&key)
 			keys = append(keys, key)
 		}
 		c.KeyringManager = NewKeyrings(keys...)
@@ -153,6 +152,7 @@ func NewClient(opts ...Option) (*Client, error) {
 	if client.Timeout <= 0 {
 		client.Timeout = time.Second * 30
 	}
+
 	return client, nil
 }
 
@@ -288,18 +288,16 @@ func (c *Client) SubmitExtrinsic(caller *signature.KeyringPair, call types.Call,
 	}
 
 	c.PutCaller(&keypair)
-
-	sub, err := c.RPC.Author.SubmitAndWatchExtrinsic(ext)
-	if err != nil {
-		c.UpdateCallerNonce(&keypair)
-		return hash, errors.Wrap(err, "submit extrinsic error")
-	}
-	defer sub.Unsubscribe()
 	defer func() {
-		if err != nil && strings.Contains(err.Error(), "") {
+		if err != nil && strings.Contains(strings.ToLower(err.Error()), "priority is too low") {
 			c.UpdateCallerNonce(&keypair)
 		}
 	}()
+	sub, err := c.RPC.Author.SubmitAndWatchExtrinsic(ext)
+	if err != nil {
+		return hash, errors.Wrap(err, "submit extrinsic error")
+	}
+	defer sub.Unsubscribe()
 
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()
