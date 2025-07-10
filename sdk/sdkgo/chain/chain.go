@@ -187,17 +187,24 @@ func (c *Client) ParseSystemEventError(t types.ModuleError) error {
 //
 //	Error if connection fails
 func (c *Client) NewSubstrateAPI(rpcAddr string) error {
-	var err error
+	var (
+		err error
+		cli *rpc.SubstrateAPI
+	)
 	if rpcAddr != "" {
-		c.SubstrateAPI, err = rpc.NewSubstrateAPI(rpcAddr)
+		cli, err = rpc.NewSubstrateAPI(rpcAddr)
 	} else {
 		if len(c.Rpcs) <= 0 {
 			return errors.New("Invalid RPC address")
 		}
 		url := c.Rpcs[rand.Intn(len(c.Rpcs))]
-		c.SubstrateAPI, err = rpc.NewSubstrateAPI(url)
+		cli, err = rpc.NewSubstrateAPI(url)
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	c.SubstrateAPI = cli
+	return nil
 }
 
 // RefreshSubstrateApi reconnects to RPC endpoints, optionally shuffling the list.

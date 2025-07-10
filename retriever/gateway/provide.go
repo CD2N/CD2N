@@ -205,12 +205,12 @@ func (g *Gateway) FetchFile(ctx context.Context, fid, did, token string) (string
 	return fpath, nil
 }
 
-func (g *Gateway) ProvideTaskChecker(ctx context.Context, buffer *buffer.FileBuffer,stat Statistics) error {
+func (g *Gateway) ProvideTaskChecker(ctx context.Context, buffer *buffer.FileBuffer, stat Statistics) error {
 	ticker := time.NewTicker(task.PROVIDE_TASK_CHECK_TIME)
 	for {
 		select {
 		case <-ticker.C:
-			if err := g.checker(ctx, buffer,stat); err != nil {
+			if err := g.checker(ctx, buffer, stat); err != nil {
 				logger.GetLogger(config.LOG_PROVIDER).Error(err)
 			}
 		case <-ctx.Done():
@@ -357,9 +357,8 @@ func TaskGc(buffer *buffer.FileBuffer, ftask task.ProvideTask) {
 }
 
 func (g *Gateway) GetCessClient() (*chain.Client, error) {
-
 	if g.cessCli != nil {
-		if _, err := g.cessCli.RPC.Chain.GetBlockHash(0); err == nil {
+		if _, err := g.cessCli.QueryBlockNumber(""); err == nil {
 			return g.cessCli, nil
 		}
 		if err := g.cessCli.RefreshSubstrateApi(true); err != nil {
