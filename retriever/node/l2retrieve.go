@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"path/filepath"
 	"time"
 
 	"github.com/CD2N/CD2N/retriever/config"
@@ -21,21 +20,41 @@ import (
 type L2Retriever interface {
 	GetRetrieveTask(ctx context.Context, tid string) (task.RetrieveTask, error)
 	ReceiveData(ctx context.Context, tid, provider, fpath string, pubkey []byte) error
-	RetrieveDataFromL2(ctx context.Context, reqId, extdata, user string, exp time.Duration, did string, sign []byte) (string, error)
+	RetrieveDataFromL2(ctx context.Context, req RetrievalRequest) (string, error)
 }
 
-// func (mg *Manager) GetDataCid(dataId string) (string, error) {
-// 	c, err := cid.Decode(dataId)
-// 	if err == nil {
-// 		return c.String(), nil
-// 	}
-// 	var CID string
-// 	err = client.GetData(mg.cidRecord, dataId, &CID)
-// 	if err != nil {
-// 		return "", errors.Wrap(err, "get data cid error")
-// 	}
-// 	return CID, nil
-// }
+type RetrievalRequest struct {
+	ReqId   string
+	Channel string
+	Did     string
+	ExtData string
+	User    string
+	Exp     time.Duration
+	Sign    []byte
+}
+
+func NewRetrievalRequest(reqId, extdata, user string, exp time.Duration, did string, sign []byte) RetrievalRequest {
+	return RetrievalRequest{
+		ReqId:   reqId,
+		User:    user,
+		Did:     did,
+		Exp:     exp,
+		Sign:    sign,
+		ExtData: extdata,
+	}
+}
+
+func NewCessRetrievalRequest(reqId, extdata, user string, exp time.Duration, did string, sign []byte) RetrievalRequest {
+	req := NewRetrievalRequest(reqId, extdata, user, exp, did, sign)
+	req.Channel = client.CHANNEL_RETRIEVE
+	return req
+}
+
+func NewIpfsRetrievalRequest(reqId, extdata, user string, exp time.Duration, did string, sign []byte) RetrievalRequest {
+	req := NewRetrievalRequest(reqId, extdata, user, exp, did, sign)
+	req.Channel = client.CHANNEL_IPFS_RETRIEVE
+	return req
+}
 
 func (mg *Manager) GetRetrieveTask(ctx context.Context, tid string) (task.RetrieveTask, error) {
 	var rtask task.RetrieveTask
@@ -50,14 +69,14 @@ func (mg *Manager) GetRetrieveTask(ctx context.Context, tid string) (task.Retrie
 	return rtask, nil
 }
 
-func (mg *Manager) RetrieveData(ctx context.Context, did, requester, reqId, extdata string, exp time.Duration, sign []byte) (string, error) {
+func (mg *Manager) RetrieveData(ctx context.Context, req RetrievalRequest) (string, error) {
 	//publish retrieve data task
 	mg.retrieveNum.Add(1)
-	ch, err := mg.NewRetrieveDataTask(ctx, did, requester, reqId, extdata, exp, sign)
+	ch, err := mg.NewRetrieveTask(ctx, req)
 	if err != nil {
 		return "", errors.Wrap(err, "retrieve data error")
 	}
-	timer := time.NewTimer(exp)
+	timer := time.NewTimer(req.Exp)
 	select {
 	case <-ctx.Done():
 		return "", errors.Wrap(ctx.Err(), "retrieve data error")
@@ -93,6 +112,24 @@ func (mg *Manager) ReceiveData(ctx context.Context, tid, provider, fpath string,
 	logger.GetLogger(config.LOG_RETRIEVE).Infof("receive data %s, from file %s ,task id: %s", task.Did, task.ExtData, tid)
 	mg.callbackCh <- tid
 	return nil
+}
+
+func (mg *Manager) NewRetrieveTask(ctx context.Context, req RetrievalRequest) (chan string, error) {
+	ch := make(chan string, 1)
+	task := NewRetrieveTask(req.Did, req.User, mg.nodeAddr, req.ReqId, req.ExtData, int64(req.Exp), req.Sign)
+	err := client.SetMessage(mg.redisCli, ctx, task.Tid, task.Marshal(), req.Exp)
+	if err != nil {
+		return nil, errors.Wrap(err, "new retrieve data task error")
+	}
+	err = client.PublishMessage(mg.redisCli, ctx, req.Channel, task.Task)
+	if err != nil {
+		return nil, errors.Wrap(err, "new retrieve data task error")
+	}
+	logger.GetLogger(config.LOG_RETRIEVE).Infof("new retrieve data task %s for fragment %s, from file %s", task.Tid, req.Did, req.ExtData)
+	mg.rw.Lock()
+	defer mg.rw.Unlock()
+	mg.rtasks[task.Tid] = ch
+	return ch, nil
 }
 
 func (mg *Manager) NewRetrieveDataTask(ctx context.Context, did, requester, reqId, extdata string, exp time.Duration, sign []byte) (chan string, error) {
@@ -148,16 +185,14 @@ func NewRetrieveTask(did, reqer, acc, reqId, extdata string, exp int64, sign []b
 	}
 }
 
-//u, err := url.JoinPath(h.teeEndpoint, client.AUDIT_DATA_URL)
-
-func (mg *Manager) RetrieveDataFromL2(ctx context.Context, reqId, extdata, user string, exp time.Duration, did string, sign []byte) (string, error) {
+func (mg *Manager) RetrieveDataFromL2(ctx context.Context, req RetrievalRequest) (string, error) {
 
 	u, err := url.JoinPath(mg.teeEndpoint, tsproto.AUDIT_DATA_URL)
 	if err != nil {
 		return "", errors.Wrap(err, "retrieve data from l2 cache network error")
 	}
 
-	tid, err := mg.RetrieveData(ctx, did, mg.nodeAddr, reqId, extdata, exp, sign)
+	tid, err := mg.RetrieveData(ctx, req)
 	if err != nil {
 		return "", errors.Wrap(err, "retrieve data from l2 cache network error")
 	}
@@ -165,24 +200,24 @@ func (mg *Manager) RetrieveDataFromL2(ctx context.Context, reqId, extdata, user 
 	if err != nil {
 		return "", errors.Wrap(err, "retrieve data from l2 cache network error")
 	}
-	rpath, err := mg.databuf.NewBufPath(tid)
+	rpath, err := mg.databuf.NewBufPath(task.Did)
 	if err != nil {
 		return "", errors.Wrap(err, "retrieve data from l2 cache network error")
 	}
-	if user == "" {
-		user = utils.Remove0x(mg.nodeAddr)
+	if req.User == "" {
+		req.User = utils.Remove0x(mg.nodeAddr)
 	} else {
-		user = utils.Remove0x(user)
+		req.User = utils.Remove0x(req.User)
 	}
 	if len(task.Pubkey) > 0 {
 		tidBytes, _ := hex.DecodeString(tid)
 		if err = tsproto.AuditData(u, task.DataPath, rpath, tsproto.TeeReq{
-			Cid:         did,
-			UserAcc:     user,
+			Cid:         req.Did,
+			UserAcc:     req.User,
 			Key:         task.Pubkey,
 			Nonce:       tidBytes,
-			RequestId:   reqId,
-			UserSign:    sign,
+			RequestId:   req.ReqId,
+			UserSign:    req.Sign,
 			SupplierAcc: task.Provider,
 		}); err != nil {
 			return "", errors.Wrap(err, "retrieve data from l2 cache network error")
@@ -190,6 +225,6 @@ func (mg *Manager) RetrieveDataFromL2(ctx context.Context, reqId, extdata, user 
 	} else {
 		rpath = task.DataPath
 	}
-	mg.databuf.AddData(filepath.Base(rpath), rpath)
+	mg.databuf.AddData(task.Did, rpath)
 	return rpath, nil
 }

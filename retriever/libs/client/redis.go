@@ -14,6 +14,10 @@ const (
 	CHANNEL_PROVIDE = "provide_task"
 	//the cnd node requests the provider to retrieve data
 	CHANNEL_RETRIEVE = "retrieve_task"
+
+	CHANNEL_DATA_OFFLOAD = "data_offload_task"
+
+	CHANNEL_IPFS_RETRIEVE = "ipfs_retrieve_task"
 )
 
 func NewRedisClient(addr, username, password string) *redis.Client {

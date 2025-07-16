@@ -288,13 +288,12 @@ func (c *Client) SubmitExtrinsic(caller *signature.KeyringPair, call types.Call,
 	}
 
 	c.PutCaller(&keypair)
-	defer func() {
-		if err != nil && strings.Contains(strings.ToLower(err.Error()), "priority is too low") {
-			c.UpdateCallerNonce(&keypair)
-		}
-	}()
+
 	sub, err := c.RPC.Author.SubmitAndWatchExtrinsic(ext)
 	if err != nil {
+		if strings.Contains(err.Error(), "Priority is too low") {
+			c.UpdateCallerNonce(&keypair)
+		}
 		return hash, errors.Wrap(err, "submit extrinsic error")
 	}
 	defer sub.Unsubscribe()
@@ -492,12 +491,14 @@ func (c *Client) UpdateCallerNonce(caller *signature.KeyringPair) error {
 	if !ok {
 		return errors.New("failed to get the nonce value on chain")
 	}
-	act, _ := c.nonceMap.LoadOrStore(caller.Address, &atomic.Uint64{})
+	act, loaded := c.nonceMap.LoadOrStore(caller.Address, &atomic.Uint64{})
 	v, ok := act.(*atomic.Uint64)
 	if !ok {
 		errors.New("invalid nonce value")
 	}
-	v.Store(uint64(accountInfo.Nonce))
+	if loaded && v.Load() < uint64(accountInfo.Nonce) {
+		v.Store(uint64(accountInfo.Nonce))
+	}
 	return nil
 }
 

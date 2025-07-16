@@ -49,17 +49,18 @@ type Cd2nNode struct {
 }
 
 type Gateway struct {
-	redisCli   *redis.Client
-	cessCli    *chain.Client
-	taskRecord *leveldb.DB
-	pool       *ants.Pool
-	pstats     *task.ProvideStat
-	contract   *evm.CacheProtoContract
-	DealMap    *sync.Map
-	FileCacher *buffer.FileBuffer
-	cm         *CryptoModule
-	dlPool     *ants.Pool
-	keyLock    *task.EasyKeyLock
+	redisCli     *redis.Client
+	cessCli      *chain.Client
+	taskRecord   *leveldb.DB
+	pool         *ants.Pool
+	pstats       *task.ProvideStat
+	contract     *evm.CacheProtoContract
+	DealMap      *sync.Map
+	FileCacher   *buffer.FileBuffer
+	cm           *CryptoModule
+	dlPool       *ants.Pool
+	offloadingQueue chan DataUnit
+	keyLock      *task.EasyKeyLock
 }
 
 func NewGateway(redisCli *redis.Client, contract *evm.CacheProtoContract, cacher *buffer.FileBuffer, taskRec *leveldb.DB) (*Gateway, error) {
@@ -85,12 +86,13 @@ func NewGateway(redisCli *redis.Client, contract *evm.CacheProtoContract, cacher
 			Retried: &atomic.Int64{},
 			Fids:    &sync.Map{},
 		},
-		DealMap:    &sync.Map{},
-		pool:       pool,
-		dlPool:     dlPool,
-		FileCacher: cacher,
-		cm:         cm,
-		keyLock:    &task.EasyKeyLock{Map: &sync.Map{}},
+		DealMap:      &sync.Map{},
+		pool:         pool,
+		dlPool:       dlPool,
+		FileCacher:   cacher,
+		cm:           cm,
+		offloadingQueue: make(chan DataUnit, 98304),
+		keyLock:      &task.EasyKeyLock{Map: &sync.Map{}},
 	}
 	_, err = gateway.GetCessClient()
 	if err != nil {

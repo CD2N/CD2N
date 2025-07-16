@@ -170,7 +170,7 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 	}()
 
 	h.retr, err = node.NewResourceRetriever(
-		256, contractCli.Node.Hex(), h.partners,
+		512, contractCli.Node.Hex(), h.partners,
 		h.buffer, h.node, contractCli.Signature,
 	)
 
@@ -240,6 +240,9 @@ func (h *ServerHandle) RechargeGasFeeForTEE(addr string, conf config.Config) err
 		return errors.Wrap(err, "check and transfer gas free error")
 	}
 	account, err := utils.ParsingPublickey(cessAcc)
+	if err != nil {
+		return errors.Wrap(err, "check and transfer gas free error")
+	}
 	info, err := cli.QueryAccountInfo(account, 0)
 	if err != nil {
 		return errors.Wrap(err, "check and transfer gas free error")

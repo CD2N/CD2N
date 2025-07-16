@@ -42,7 +42,6 @@ type Cache struct {
 	hitNum           uint64
 	cache            map[string]*Item
 	head, tail       *Item
-	addCallbacks     []func(Item)
 	swapoutCallbacks []func(Item)
 	lock             *sync.Mutex
 }
@@ -142,10 +141,6 @@ func (c *Cache) moveToHead(item *Item) {
 	item.Pre = c.head
 	c.head.Next.Pre = item
 	c.head.Next = item
-
-	for _, call := range c.addCallbacks {
-		call(*item)
-	}
 }
 
 func (c Cache) RemoveItem(key string) {
@@ -157,12 +152,6 @@ func (c Cache) RemoveItem(key string) {
 		c.cacheSize -= uint64(v.Size)
 		c.itemNum--
 	}
-}
-
-func (c *Cache) RegisterAddCallbacks(handles ...func(Item)) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	c.addCallbacks = append(c.addCallbacks, handles...)
 }
 
 func (c *Cache) RegisterSwapoutCallbacksCallbacks(handles ...func(Item)) {

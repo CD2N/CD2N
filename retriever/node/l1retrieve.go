@@ -298,31 +298,31 @@ func (t CessRetrieveTask) Execute(ctx context.Context) ([]string, error) {
 	}
 	retriever, ok := t.LocatingResources(nodes)
 	if ok {
-		fpaths := t.BatchExecutor(ctx, len(t.Fragments)-config.PARITY_NUM, func(ctx context.Context, did string) (string, error) {
-			//access L2 cache to retrieve data from this node
-			if retriever.Info.Endpoint == "" && retriever.Info.Address == "" && Abort(t.FiltePoint, ABORT_BACK_FETCH) {
-				reqId, sign, err := t.SignRequestTool()
-				if err != nil {
-					return "", errors.Wrap(err, "execute worker error")
+		fpaths := t.BatchExecutor(ctx, len(t.Fragments)-config.PARITY_NUM,
+			func(ctx context.Context, did string) (string, error) {
+				//access L2 cache to retrieve data from this node
+				if retriever.Info.Endpoint == "" && retriever.Info.Address == "" && Abort(t.FiltePoint, ABORT_BACK_FETCH) {
+					reqId, sign, err := t.SignRequestTool()
+					if err != nil {
+						return "", errors.Wrap(err, "execute worker error")
+					}
+					fpath, err := t.RetrieveDataFromL2(ctx, NewCessRetrievalRequest(reqId, t.Fid, t.User, time.Second*15, did, sign))
+					if err != nil {
+						return "", errors.Wrap(err, "execute worker error")
+					}
+					return fpath, nil
 				}
-				fpath, err := t.RetrieveDataFromL2(ctx, reqId, t.Fid, t.User, time.Second*15, did, sign)
+
+				if Abort(t.FiltePoint, ABORT_JUMP_REQUEST) {
+					return "", errors.Wrap(errors.New("abort retrieving data from a peer"), "execute worker error")
+				}
+				//Retrieve data from a peer Retriever
+				fpath, err := t.GetDataFromRemote(did, t.Fid, retriever)
 				if err != nil {
 					return "", errors.Wrap(err, "execute worker error")
 				}
 				return fpath, nil
-			}
-
-			//
-			if Abort(t.FiltePoint, ABORT_JUMP_REQUEST) {
-				return "", errors.Wrap(errors.New("abort retrieving data from a peer"), "execute worker error")
-			}
-			//Retrieve data from a peer Retriever
-			fpath, err := t.GetDataFromRemote(did, t.Fid, retriever)
-			if err != nil {
-				return "", errors.Wrap(err, "execute worker error")
-			}
-			return fpath, nil
-		}, t.Fragments...)
+			}, t.Fragments...)
 		return fpaths, nil
 	}
 
