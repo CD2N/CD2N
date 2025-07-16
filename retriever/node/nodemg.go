@@ -199,7 +199,7 @@ func (nm *NodeManager) updateCachers() {
 func (nm *NodeManager) SaveOrUpdateCacher(pubkey []byte, extIp string, storageNodes []tsproto.StorageNode) error {
 	nm.updateCachers()
 
-	if len(pubkey) == 0 || extIp == "" || len(storageNodes) == 0 {
+	if len(pubkey) == 0 || extIp == ""  {
 		return nil
 	}
 

@@ -11,6 +11,29 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+func (h *ServerHandle) ClaimOffloadingData(c *gin.Context) {
+	var req tsproto.FileRequest
+	err := c.BindJSON(&req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "claim file error", "bad request params"))
+		return
+	}
+
+	du, err := h.gateway.ClaimOffloadingData(req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "claim file error", err.Error()))
+		return
+	}
+
+	err = h.partners.SaveOrUpdateCacher(req.Pubkey, c.ClientIP(), req.StorageNodes)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "claim file error", err.Error()))
+		return
+	}
+	c.Header("Did", du.Did)
+	c.File(du.Path)
+}
+
 func (h *ServerHandle) ClaimFile(c *gin.Context) {
 	var req tsproto.FileRequest
 	err := c.BindJSON(&req)
@@ -25,7 +48,11 @@ func (h *ServerHandle) ClaimFile(c *gin.Context) {
 		return
 	}
 	addr := crypto.PubkeyToAddress(*key).Hex()
-	h.partners.SaveOrUpdateCacher(req.Pubkey, c.ClientIP(), req.StorageNodes)
+	err = h.partners.SaveOrUpdateCacher(req.Pubkey, c.ClientIP(), req.StorageNodes)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "claim file error", err.Error()))
+		return
+	}
 	resp, err := h.gateway.ClaimFile(context.Background(), req)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "claim file error", err.Error()))

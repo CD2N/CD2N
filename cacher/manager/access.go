@@ -160,6 +160,18 @@ func (te *CessAccessTaskExecutor) Execute(task Task) error {
 		if !ok {
 			return errors.Wrap(errors.New("retriever not be found."), "execute cess access task error")
 		}
+		// retrieve data from loacl cache
+		if item := te.dataCache.Get(task.Did); item.Key == "" || item.Value == "" {
+			drp := &DataRetrieveTask{
+				Task:      task,
+				TeePubkey: retriever.TeePubkey,
+				Path:      item.Value,
+				WorkType:  WORK_FETCH_DATA,
+			}
+			te.taskCh <- drp
+			return nil
+		}
+		// retrieve data from storager
 		finfo, err := te.GetFileInfo(task.Did, task.ExtData, config.GetConfig().Network)
 		if err != nil {
 			return errors.Wrap(err, "execute cess access task error")

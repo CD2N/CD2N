@@ -174,6 +174,7 @@ func (g *Gateway) downloadFromCess(ctx context.Context, b *buffer.FileBuffer, rr
 				})
 				return
 			}
+			g.BatchOffloadingWithPaths(fragPaths)
 			sinfo.Path = segPath
 			segpathCh <- sinfo
 		}); err != nil {

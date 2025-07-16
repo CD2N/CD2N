@@ -231,6 +231,43 @@ func PushFile(url, fpath string, metaDatas map[string][]byte) ([]byte, error) {
 	return resp, nil
 }
 
+func ClaimOffloadingData(url string, req FileRequest) ([]byte, string, error) {
+	var buffer bytes.Buffer
+	jbytes, err := json.Marshal(req)
+	if err != nil {
+		return nil, "", errors.Wrap(err, "claim offloading data error")
+	}
+
+	if _, err := buffer.Write(jbytes); err != nil {
+		return nil, "", errors.Wrap(err, "claim offloading data error")
+	}
+
+	request, err := http.NewRequest(http.MethodPost, url, &buffer)
+	if err != nil {
+		return nil, "", errors.Wrap(err, "claim offloading data error")
+	}
+	request.Header.Add("Content-Type", "application/json")
+
+	resp, err := http.DefaultClient.Do(request)
+	if err != nil {
+		return nil, "", errors.Wrap(err, "claim offloading data error")
+	}
+	defer resp.Body.Close()
+	bytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, "", errors.Wrap(err, "claim offloading data error")
+	}
+	if resp.StatusCode >= 400 {
+		err = fmt.Errorf("error: %s", string(bytes))
+		return nil, "", errors.Wrap(err, "claim offloading data error")
+	}
+	did := resp.Header.Get("Did")
+	if did == "" {
+		return nil, "", errors.Wrap(errors.New("empty data id"), "claim offloading data error")
+	}
+	return bytes, did, nil
+}
+
 func ClaimFile(url string, req FileRequest) (FileResponse, error) {
 	var (
 		buffer bytes.Buffer

@@ -101,7 +101,6 @@ func (h *ServerHandle) UploadLocalFile(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "upload user file error", err.Error()))
 		return
 	}
-
 	h.upload(c, finfo, async, noProxy)
 }
 
@@ -139,7 +138,6 @@ func (h *ServerHandle) UploadUserFileTemp(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "upload user file error", err.Error()))
 		return
 	}
-
 	h.upload(c, finfo, async, noProxy)
 }
 
@@ -181,7 +179,6 @@ func (h *ServerHandle) UploadUserFile(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "upload user file error", err.Error()))
 		return
 	}
-
 	h.upload(c, finfo, async, noProxy)
 }
 
@@ -198,6 +195,7 @@ func (h *ServerHandle) upload(c *gin.Context, finfo task.FileInfo, async, noProx
 			c.JSON(http.StatusInternalServerError, tsproto.NewResponse(response.CODE_UP_ERROR, "upload file error", err.Error()))
 			return
 		}
+		h.gateway.BatchOffloadingWithFileInfo(finfo)
 		c.JSON(http.StatusOK, tsproto.NewResponse(http.StatusOK, "success", finfo.Fid))
 		return
 	}
@@ -373,7 +371,6 @@ func (h *ServerHandle) UploadFileParts(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "upload user file error", err.Error()))
 		return
 	}
-
 	h.upload(c, finfo, async, noProxy)
 }
 
@@ -510,6 +507,8 @@ func (h *ServerHandle) AsyncUploadFiles(ctx context.Context) error {
 
 			if err := h.gateway.ProvideFile(context.Background(), h.buffer, time.Hour, box.Info, false); err != nil {
 				logger.GetLogger(config.LOG_GATEWAY).Info("provide file async error ", err)
+			} else {
+				h.gateway.BatchOffloadingWithFileInfo(box.Info)
 			}
 			client.DeleteData(h.partRecord, key)
 			return nil

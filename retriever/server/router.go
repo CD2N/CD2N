@@ -124,6 +124,7 @@ func RegisterHandles(router *gin.Engine, h *handles.ServerHandle) {
 	}
 	router.POST("/claim", h.Ac.ClaimDataLimitMiddleware(), h.ClaimFile)
 	router.GET("/fetch", h.FetchFile)
+	router.POST("/offload", h.Ac.ClaimDataLimitMiddleware(), h.ClaimOffloadingData)
 
 	gateway := router.Group("/gateway")
 	gateway.Use(TokenVerify)
