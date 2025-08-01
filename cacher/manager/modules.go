@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/CD2N/CD2N/cacher/config"
@@ -59,6 +60,7 @@ func (n *Retriever) IsAvailable() bool {
 type StoragersManager struct {
 	lock      *sync.RWMutex
 	storagers []Storager
+	num       *atomic.Uint32
 	smap      map[string]int
 	index     int
 }
@@ -66,8 +68,13 @@ type StoragersManager struct {
 func NewStoragersManager() *StoragersManager {
 	return &StoragersManager{
 		lock: &sync.RWMutex{},
+		num:  &atomic.Uint32{},
 		smap: make(map[string]int),
 	}
+}
+
+func (sm *StoragersManager) GetStoragerNumber() int {
+	return int(sm.num.Load())
 }
 
 func (sm *StoragersManager) GetStorager(minerAcc string) (Storager, bool) {
@@ -96,6 +103,7 @@ func (sm *StoragersManager) ExportStorages() []tsproto.StorageNode {
 			Endpoint: storager.Endpoint,
 		})
 	}
+	sm.num.Store(uint32(len(storagers)))
 	return storagers
 }
 

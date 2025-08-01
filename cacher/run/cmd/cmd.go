@@ -246,8 +246,18 @@ func cmd_run_func(cmd *cobra.Command, args []string) {
 		}
 	}()
 
-	//registering task executors
+	offloadingTaskExecutor, err := manager.NewOffloadingTaskExecutor(
+		conf.SecretKey, cacheModule,
+		filepath.Join(conf.WorkSpace, config.DEFAULT_BUFFER_DIR),
+		cessAccessTaskExecutor.StoragersManager,
+	)
+	if err != nil {
+		log.Println(err)
+		return
+	}
 
+	//registering task executors
+	taskDispatcher.RegisterTaskExecutor(client.CHANNEL_DATA_OFFLOAD, offloadingTaskExecutor)
 	taskDispatcher.RegisterTaskExecutor(client.CHANNEL_PROVIDE, cessAccessTaskExecutor)
 	taskDispatcher.RegisterTaskExecutor(client.CHANNEL_RETRIEVE, cessAccessTaskExecutor)
 

@@ -110,7 +110,7 @@ func RegisterMonitor(router *gin.Engine, apikey string) {
 }
 
 func RegisterHandles(router *gin.Engine, h *handles.ServerHandle) {
-
+	router.Use(h.AddNodeAddressHeader)
 	router.GET("/status", h.GetNodeInfo)
 	router.POST("/upfile", h.UploadUserFileTemp)
 	router.GET("/capacity/:addr", h.QueryCacheCap)

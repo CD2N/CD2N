@@ -1,6 +1,7 @@
 package gateway
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -9,13 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/CD2N/CD2N/retriever/config"
 	"github.com/CD2N/CD2N/retriever/libs/client"
 	"github.com/CESSProject/cess-crypto/gosdk"
 	"github.com/ChainSafe/go-schnorrkel"
+	"github.com/go-redis/redis/v8"
 	"github.com/gtank/ristretto255"
 	"github.com/pkg/errors"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 const (
@@ -26,7 +26,7 @@ const (
 )
 
 type CryptoModule struct {
-	capsules *leveldb.DB
+	capsules *redis.Client
 	sk       *schnorrkel.SecretKey
 	pubkey   *schnorrkel.PublicKey
 }
@@ -36,7 +36,7 @@ type CapsuleItem struct {
 	Date    time.Time
 }
 
-func NewCryptoModule(capsules *leveldb.DB) (*CryptoModule, error) {
+func NewCryptoModule(capsules *redis.Client) (*CryptoModule, error) {
 	sk, pk, err := schnorrkel.GenerateKeypair()
 	if err != nil {
 		return nil, errors.Wrap(err, "new crypto module error")
@@ -50,8 +50,8 @@ func NewCryptoModule(capsules *leveldb.DB) (*CryptoModule, error) {
 
 func (cm *CryptoModule) GetCapsule(did string) ([]byte, [32]byte, error) {
 	var item CapsuleItem
-
-	if err := client.GetData(cm.capsules, config.DB_CAPSULE_PREFIX+did, &item); err != nil {
+	if err := client.GetDataFromRedis(cm.capsules, cm.capsules.Context(),
+		fmt.Sprintf("capsule-%s", did), &item); err != nil {
 		return nil, [32]byte{}, errors.Wrap(err, "get capsule error")
 	}
 
@@ -103,7 +103,7 @@ func (cm *CryptoModule) SaveCapsule(fid string, c *gosdk.Capsule) error {
 		Capsule: *c,
 		Date:    time.Now(),
 	}
-	if err := client.PutData(cm.capsules, config.DB_CAPSULE_PREFIX+fid, item); err != nil {
+	if err := client.PutDataToRedis(cm.capsules, context.Background(), fmt.Sprintf("capsule-%s", fid), item, time.Hour*72); err != nil {
 		return errors.Wrap(err, "save capsule error")
 	}
 	return nil
@@ -187,7 +187,8 @@ func (cm *CryptoModule) ReEncryptKey(did string, capsule, rkb []byte) (*gosdk.Ca
 	)
 	if len(capsule) <= 0 && did != "" {
 		var item CapsuleItem
-		if err = client.GetData(cm.capsules, config.DB_CAPSULE_PREFIX+did, &item); err != nil {
+		if err = client.GetDataFromRedis(cm.capsules, context.Background(),
+			fmt.Sprintf("capsule-%s", did), &item); err != nil {
 			return nil, errors.Wrap(err, "re-encrypt pre key error")
 		}
 		c = item.Capsule

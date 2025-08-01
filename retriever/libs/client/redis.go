@@ -30,6 +30,31 @@ func NewRedisClient(addr, username, password string) *redis.Client {
 	return client
 }
 
+func GetDataFromRedis(cli *redis.Client, ctx context.Context, key string, value any) error {
+	data := GetMessage(cli, ctx, key)
+	if len(data) <= 0 {
+		return errors.Wrap(errors.New("data does not exist"), "get data from redis error")
+	}
+	if err := json.Unmarshal(data, value); err != nil {
+		return errors.Wrap(err, "get data from redis error")
+	}
+	return nil
+}
+
+func PutDataToRedis(cli *redis.Client, ctx context.Context, key string, value any, exp time.Duration) error {
+	jbytes, err := json.Marshal(value)
+	if err != nil {
+		return errors.Wrap(err, "put data to redis error")
+	}
+	if exp <= 0 || exp > time.Hour*3*24 {
+		exp = time.Hour * 24
+	}
+	if err := SetMessage(cli, ctx, key, jbytes, exp); err != nil {
+		return errors.Wrap(err, "put data to redis error")
+	}
+	return nil
+}
+
 func PublishMessage(cli *redis.Client, ctx context.Context, channel string, data any) error {
 	jbytes, err := json.Marshal(data)
 	if err != nil {
@@ -73,4 +98,19 @@ func DeleteMessage(cli *redis.Client, ctx context.Context, key ...string) error 
 		return errors.New("delete message error")
 	}
 	return cmd.Err()
+}
+
+func GetKeysByPrefix(rdb *redis.Client, prefix string) ([]string, error) {
+	ctx := context.Background()
+	var keys []string
+	iter := rdb.Scan(ctx, 0, prefix+"*", 0).Iterator()
+
+	for iter.Next(ctx) {
+		keys = append(keys, iter.Val())
+	}
+
+	if err := iter.Err(); err != nil {
+		return nil, err
+	}
+	return keys, nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"net/url"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/CD2N/CD2N/retriever/config"
+	"github.com/CD2N/CD2N/retriever/libs/client"
 	"github.com/CD2N/CD2N/retriever/libs/task"
 	"github.com/CD2N/CD2N/retriever/utils"
 	"github.com/CD2N/CD2N/sdk/sdkgo/chain"
@@ -24,7 +26,6 @@ import (
 	"github.com/go-redis/redis/v8"
 	"github.com/panjf2000/ants/v2"
 	"github.com/pkg/errors"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 type Status struct {
@@ -49,21 +50,20 @@ type Cd2nNode struct {
 }
 
 type Gateway struct {
-	redisCli     *redis.Client
-	cessCli      *chain.Client
-	taskRecord   *leveldb.DB
-	pool         *ants.Pool
-	pstats       *task.ProvideStat
-	contract     *evm.CacheProtoContract
-	DealMap      *sync.Map
-	FileCacher   *buffer.FileBuffer
-	cm           *CryptoModule
-	dlPool       *ants.Pool
+	nodeAcc         string
+	redisCli        *redis.Client
+	cessCli         *chain.Client
+	pool            *ants.Pool
+	pstats          *task.ProvideStat
+	contract        *evm.CacheProtoContract
+	FileCacher      *buffer.FileBuffer
+	cm              *CryptoModule
+	dlPool          *ants.Pool
 	offloadingQueue chan DataUnit
-	keyLock      *task.EasyKeyLock
+	keyLock         *task.EasyKeyLock
 }
 
-func NewGateway(redisCli *redis.Client, contract *evm.CacheProtoContract, cacher *buffer.FileBuffer, taskRec *leveldb.DB) (*Gateway, error) {
+func NewGateway(redisCli *redis.Client, contract *evm.CacheProtoContract, cacher *buffer.FileBuffer) (*Gateway, error) {
 	pool, err := ants.NewPool(256)
 	if err != nil {
 		return nil, errors.Wrap(err, "new gateway error")
@@ -72,27 +72,26 @@ func NewGateway(redisCli *redis.Client, contract *evm.CacheProtoContract, cacher
 	if err != nil {
 		return nil, errors.Wrap(err, "new gateway error")
 	}
-	cm, err := NewCryptoModule(taskRec)
+	cm, err := NewCryptoModule(redisCli)
 	if err != nil {
 		return nil, errors.Wrap(err, "new gateway error")
 	}
 	gateway := &Gateway{
-		redisCli:   redisCli,
-		taskRecord: taskRec,
-		contract:   contract,
+		nodeAcc:  contract.Node.Hex(),
+		redisCli: redisCli,
+		contract: contract,
 		pstats: &task.ProvideStat{
 			Ongoing: &atomic.Int64{},
 			Done:    &atomic.Int64{},
 			Retried: &atomic.Int64{},
 			Fids:    &sync.Map{},
 		},
-		DealMap:      &sync.Map{},
-		pool:         pool,
-		dlPool:       dlPool,
-		FileCacher:   cacher,
-		cm:           cm,
+		pool:            pool,
+		dlPool:          dlPool,
+		FileCacher:      cacher,
+		cm:              cm,
 		offloadingQueue: make(chan DataUnit, 98304),
-		keyLock:      &task.EasyKeyLock{Map: &sync.Map{}},
+		keyLock:         &task.EasyKeyLock{Map: &sync.Map{}},
 	}
 	_, err = gateway.GetCessClient()
 	if err != nil {
@@ -142,13 +141,16 @@ func (g *Gateway) CheckAndCreateOrder(ctx context.Context, node Cd2nNode, traffi
 
 func (g *Gateway) WaitFileCache(key string, timeout time.Duration) error {
 	timer := time.NewTimer(timeout)
+
 	for {
 		select {
 		case <-timer.C:
 			return errors.New("timeout")
 		default:
-			_, ok := g.DealMap.LoadOrStore(key, struct{}{})
-			if !ok {
+			if ok, _ := client.SetNxMessage(
+				g.redisCli, context.Background(),
+				fmt.Sprintf("dlkey-%s", key), []byte{}, timeout,
+			); !ok {
 				return nil
 			}
 			time.Sleep(time.Millisecond * 300)
@@ -157,8 +159,27 @@ func (g *Gateway) WaitFileCache(key string, timeout time.Duration) error {
 }
 
 func (g *Gateway) ReleaseCacheTask(key string) {
-	g.DealMap.Delete(key)
+	client.DeleteMessage(g.redisCli, context.Background(), fmt.Sprintf("dlkey-%s", key))
+}
 
+func (g *Gateway) PutProvideTask(key string, ftask task.ProvideTask) error {
+	if err := client.PutDataToRedis(
+		g.redisCli, context.Background(),
+		fmt.Sprintf("%s-ftask_key-%s", g.nodeAcc, key), ftask, time.Hour*24,
+	); err != nil {
+		return errors.Wrap(err, "put provide task error")
+	}
+	return nil
+}
+
+func (g *Gateway) GetProvideTask(key string, value any) error {
+	if err := client.GetDataFromRedis(
+		g.redisCli, context.Background(),
+		fmt.Sprintf("%s-ftask_key-%s", g.nodeAcc, key), value,
+	); err != nil {
+		return errors.Wrap(err, "get provide task error")
+	}
+	return nil
 }
 
 func (g *Gateway) CompositeSegment(segmentId string, fragPaths []string) (string, error) {

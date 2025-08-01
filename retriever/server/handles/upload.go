@@ -199,7 +199,11 @@ func (h *ServerHandle) upload(c *gin.Context, finfo task.FileInfo, async, noProx
 		c.JSON(http.StatusOK, tsproto.NewResponse(http.StatusOK, "success", finfo.Fid))
 		return
 	}
-	client.PutData(h.partRecord, config.DB_FINFO_PREFIX+finfo.Fid, task.AsyncFinfoBox{Info: finfo, NonProxy: noProxy})
+	client.PutDataToRedis(
+		h.partRecord, context.Background(),
+		fmt.Sprintf("%s-async_upload-%s", h.nodeAddr, finfo.Fid),
+		task.AsyncFinfoBox{Info: finfo, NonProxy: noProxy}, 0,
+	)
 
 	if resp.Code == response.CODE_UP_ERROR {
 		c.JSON(http.StatusInternalServerError, resp)
@@ -318,7 +322,7 @@ func (h *ServerHandle) UploadFileParts(c *gin.Context) {
 	lock.Lock()
 	defer lock.Unlock()
 	var partsInfo PartsInfo
-	err = client.GetData(h.partRecord, config.DB_FILEPART_PREFIX+shadowHash, &partsInfo)
+	err = client.GetDataFromRedis(h.partRecord, context.Background(), fmt.Sprintf("%s-filepart-%s", h.nodeAddr, shadowHash), &partsInfo)
 	if err != nil {
 		h.buffer.RemoveData(fpath)
 		c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "parts upload error", err.Error()))
@@ -337,8 +341,8 @@ func (h *ServerHandle) UploadFileParts(c *gin.Context) {
 	partsInfo.Parts[idx] = file.Filename
 	partsInfo.PartsCount++
 	if partsInfo.PartsCount < partsInfo.TotalParts {
-		err = client.PutData(h.partRecord, config.DB_FILEPART_PREFIX+shadowHash, partsInfo)
-		if err != nil {
+		if err = client.PutDataToRedis(h.partRecord, context.Background(),
+			fmt.Sprintf("%s-filepart-%s", h.nodeAddr, shadowHash), partsInfo, 0); err != nil {
 			h.buffer.RemoveData(fpath)
 			c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "parts upload error", err.Error()))
 			return
@@ -347,7 +351,7 @@ func (h *ServerHandle) UploadFileParts(c *gin.Context) {
 		return
 	}
 	//combine files
-	defer client.DeleteData(h.partRecord, config.DB_FILEPART_PREFIX+shadowHash)
+	defer client.DeleteMessage(h.partRecord, context.Background(), fmt.Sprintf("%s-filepart-%s", h.nodeAddr, shadowHash))
 	cfile, err := h.CombineFileParts(partsInfo)
 	if err != nil {
 		h.buffer.RemoveData(fpath)
@@ -406,8 +410,9 @@ func (h *ServerHandle) RequestPartsUpload(c *gin.Context) {
 	partsInfo.Owner = user.Account
 	partsInfo.UpdateDate = time.Now()
 	partsInfo.Parts = make([]string, partsInfo.TotalParts)
-	err = client.PutData(h.partRecord, config.DB_FILEPART_PREFIX+partsInfo.ShadowHash, partsInfo)
-	if err != nil {
+
+	if err = client.PutDataToRedis(h.partRecord, context.Background(),
+		fmt.Sprintf("%s-filepart-%s", h.nodeAddr, partsInfo.ShadowHash), partsInfo, 0); err != nil {
 		c.JSON(http.StatusBadRequest, tsproto.NewResponse(http.StatusBadRequest, "upload user file error", err.Error()))
 		return
 	}
@@ -475,45 +480,53 @@ func (h *ServerHandle) AsyncUploadFiles(ctx context.Context) error {
 		case <-ctx.Done():
 		case <-ticker.C:
 		}
-		if err := client.DbIterator(h.partRecord, func(b []byte) error {
-			key := string(b)
-			if !strings.Contains(key, config.DB_FINFO_PREFIX) {
-				return nil
-			}
-			var box task.AsyncFinfoBox
-			if err := client.GetData(h.partRecord, key, &box); err != nil {
-				logger.GetLogger(config.LOG_GATEWAY).Info("get file info box from db error ", err)
-				return nil
-			}
 
-			if box.NonProxy {
-				cli, err := h.gateway.GetCessClient()
-				if err != nil {
-					logger.GetLogger(config.LOG_GATEWAY).Info("provide file async error ", err)
-					return nil
-				}
-				_, err = cli.QueryDealMap(box.Info.Fid, 0)
-				if err != nil {
-					logger.GetLogger(config.LOG_GATEWAY).Info("provide file async error ", err)
-					return nil
-				}
-				if err := h.gateway.ProvideFile(context.Background(), h.buffer, time.Hour, box.Info, true); err != nil {
-					logger.GetLogger(config.LOG_GATEWAY).Info("provide file async error ", err)
-					return nil
-				}
-				client.DeleteData(h.partRecord, key)
-				return nil
-			}
+		keys, err := client.GetKeysByPrefix(h.partRecord, fmt.Sprintf("%s-async_upload-", h.nodeAddr))
+		if err != nil {
+			logger.GetLogger(config.LOG_GATEWAY).Error("query async upload task error ", err)
+			continue
+		}
 
-			if err := h.gateway.ProvideFile(context.Background(), h.buffer, time.Hour, box.Info, false); err != nil {
-				logger.GetLogger(config.LOG_GATEWAY).Info("provide file async error ", err)
-			} else {
-				h.gateway.BatchOffloadingWithFileInfo(box.Info)
+		for _, key := range keys {
+			if err := func(key string) error {
+				if !strings.Contains(key, config.DB_FINFO_PREFIX) {
+					return nil
+				}
+				var box task.AsyncFinfoBox
+				if err := client.GetDataFromRedis(h.partRecord, ctx, key, &box); err != nil {
+					logger.GetLogger(config.LOG_GATEWAY).Info("get file info box from db error ", err)
+					return nil
+				}
+
+				if box.NonProxy {
+					cli, err := h.gateway.GetCessClient()
+					if err != nil {
+						logger.GetLogger(config.LOG_GATEWAY).Error("provide file async error ", err)
+						return nil
+					}
+					_, err = cli.QueryDealMap(box.Info.Fid, 0)
+					if err != nil {
+						logger.GetLogger(config.LOG_GATEWAY).Error("provide file async error ", err)
+						return nil
+					}
+					if err := h.gateway.ProvideFile(context.Background(), h.buffer, time.Hour, box.Info, true); err != nil {
+						logger.GetLogger(config.LOG_GATEWAY).Error("provide file async error ", err)
+						return nil
+					}
+					client.DeleteMessage(h.partRecord, ctx, key)
+					return nil
+				}
+
+				if err := h.gateway.ProvideFile(context.Background(), h.buffer, time.Hour, box.Info, false); err != nil {
+					logger.GetLogger(config.LOG_GATEWAY).Error("provide file async error ", err)
+				} else {
+					h.gateway.BatchOffloadingWithFileInfo(box.Info)
+				}
+				client.DeleteMessage(h.partRecord, ctx, key)
+				return nil
+			}(key); err != nil {
+				logger.GetLogger(config.LOG_GATEWAY).Error("async upload files error ", err)
 			}
-			client.DeleteData(h.partRecord, key)
-			return nil
-		}); err != nil {
-			logger.GetLogger(config.LOG_GATEWAY).Info("traverse the file async upload request list error", err)
 		}
 	}
 }

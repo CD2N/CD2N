@@ -14,8 +14,6 @@ const (
 
 	CHANNEL_DATA_OFFLOAD = "data_offload_task"
 
-	CHANNEL_DATA_LOAD = "data_load_task"
-
 	CHANNEL_IPFS_RETRIEVE = "ipfs_retrieve_task"
 )
 
