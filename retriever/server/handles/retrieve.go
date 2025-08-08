@@ -19,6 +19,7 @@ import (
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/tsproto"
 	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
 	"github.com/gin-gonic/gin"
+	"github.com/ipfs/go-cid"
 	"github.com/pkg/errors"
 )
 
@@ -43,6 +44,7 @@ func (h *ServerHandle) FetchCacheData(c *gin.Context) {
 	if time.Duration(req.Exp) <= 0 || time.Duration(req.Exp) > time.Minute {
 		req.Exp = int64(time.Second * 15)
 	}
+
 	cessCli, err := h.gateway.GetCessClient()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError,
@@ -51,19 +53,36 @@ func (h *ServerHandle) FetchCacheData(c *gin.Context) {
 	}
 
 	fpaths, _ := gateway.GetDataFromDiskBuffer(h.buffer, req.Did)
-	if len(fpaths) <= 0 {
-		task := node.NewCesRetrieveTask(cessCli, req.UserAddr, req.ExtData, "", []string{req.Did})
-		fpaths, err = h.retr.RetrieveData(
-			context.Background(), task,
-			h.Ac.BackFetchFilterFactory(),
-			h.Ac.JumpRequestFilterFactory(),
-			h.Ac.BoradcastFilterFactory(),
-		)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "fetch data error", err.Error()))
-			return
-		}
 
+	if len(fpaths) <= 0 {
+		if _, err := cid.Decode(req.Did); err == nil {
+			var fpath string
+			fpath, err = h.buffer.NewBufPath(req.Did)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "fetch data error", err.Error()))
+				return
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(req.Exp))
+			defer cancel()
+			task := node.NewIpfsRetrievalTask(req.Did, req.UserAddr, fpath)
+			fpaths, err = h.retr.RetrieveData(ctx, task)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "fetch data error", err.Error()))
+				return
+			}
+		} else {
+			task := node.NewCesRetrieveTask(cessCli, req.UserAddr, req.ExtData, "", []string{req.Did})
+			fpaths, err = h.retr.RetrieveData(
+				context.Background(), task,
+				h.Ac.BackFetchFilterFactory(),
+				h.Ac.JumpRequestFilterFactory(),
+				h.Ac.BoradcastFilterFactory(),
+			)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "fetch data error", err.Error()))
+				return
+			}
+		}
 		if len(fpaths) <= 0 {
 			c.JSON(http.StatusInternalServerError, tsproto.NewResponse(http.StatusInternalServerError, "The specified data was not retrieved", nil))
 			return

@@ -5,7 +5,7 @@ go 1.23.0
 //replace github.com/CD2N/CD2N/sdk/sdkgo => github.com/jiuquxzy/CD2N/sdk/sdkgo v0.0.0-20250701084916-0131ee75d9ac
 
 require (
-	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250710080811-6c9e49a8e02d
+	github.com/CD2N/CD2N/sdk/sdkgo v0.0.0-20250716020959-cea237887f08
 	github.com/CESSProject/cess-crypto/gosdk v0.0.0-20250612080638-1885e7005e8a
 	github.com/bits-and-blooms/bloom/v3 v3.7.0
 	github.com/decred/base58 v1.0.5
@@ -16,6 +16,7 @@ require (
 	github.com/golang-jwt/jwt/v4 v4.5.1
 	github.com/ipfs/boxo v0.24.0
 	github.com/ipfs/go-cid v0.4.1
+	github.com/ipfs/go-ipfs-api v0.7.0
 	github.com/ipfs/go-unixfs v0.4.5
 	github.com/juju/ratelimit v1.0.2
 	github.com/klauspost/reedsolomon v1.12.4
@@ -31,6 +32,8 @@ require (
 )
 
 require (
+	github.com/benbjohnson/clock v1.3.5 // indirect
+	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/ipfs/go-blockservice v0.5.2 // indirect
 	github.com/ipfs/go-ipfs-blockstore v1.3.1 // indirect
 	github.com/ipfs/go-ipfs-chunker v0.0.1 // indirect
@@ -40,6 +43,10 @@ require (
 	github.com/ipfs/go-ipfs-posinfo v0.0.1 // indirect
 	github.com/ipfs/go-merkledag v0.11.0 // indirect
 	github.com/ipfs/go-verifcid v0.0.3 // indirect
+	github.com/libp2p/go-flow-metrics v0.1.0 // indirect
+	github.com/mitchellh/go-homedir v1.1.0 // indirect
+	github.com/multiformats/go-multiaddr v0.13.0 // indirect
+	github.com/multiformats/go-multistream v0.5.0 // indirect
 	github.com/panjf2000/ants v1.3.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/whyrusleeping/chunker v0.0.0-20181014151217-fe64bd25879f // indirect

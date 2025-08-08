@@ -106,6 +106,7 @@ func NewCessAccessTaskExecutor(sk string, c *cache.Cache, retrievers RetrieverPr
 		files:             files,
 		SignTool:          signTool,
 		selflessMode:      selfless,
+		AesKeyProvider: new(EcdhAesKeyManager),
 	}, nil
 }
 

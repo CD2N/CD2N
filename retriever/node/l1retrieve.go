@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -20,6 +21,7 @@ import (
 	"github.com/CD2N/CD2N/sdk/sdkgo/libs/tsproto"
 	"github.com/CD2N/CD2N/sdk/sdkgo/logger"
 	"github.com/bits-and-blooms/bloom/v3"
+	shell "github.com/ipfs/go-ipfs-api"
 	"github.com/panjf2000/ants/v2"
 	"github.com/pkg/errors"
 )
@@ -71,6 +73,7 @@ type ToolsProvider interface {
 	NewBufPath(paths ...string) (string, error)
 	AddData(key string, fpath string)
 	SignRequestTool() (string, []byte, error)
+	GetIpfsShell() (*shell.Shell, error)
 }
 
 type Worker func(context.Context, string) (string, error)
@@ -81,6 +84,7 @@ type ResourceRetriever struct {
 	nodeAddr   string
 	fileFilter *bloom.BloomFilter
 	pool       *ants.Pool
+	ipfsShell  *shell.Shell
 	*buffer.FileBuffer
 	*NodeManager
 	EthSign
@@ -104,6 +108,18 @@ func NewResourceRetriever(threadNum int, nodeAddr string, nodeMgr *NodeManager, 
 		L2Retriever: l2ret,
 		FileBuffer:  buf,
 	}, nil
+}
+
+func (rr *ResourceRetriever) GetIpfsShell() (*shell.Shell, error) {
+	if rr.ipfsShell != nil && rr.ipfsShell.IsUp() {
+		return rr.ipfsShell, nil
+	}
+	rr.ipfsShell = shell.NewShell(config.GetConfig().IpfsHost)
+
+	if !rr.ipfsShell.IsUp() {
+		return nil, errors.New("no valid connection established")
+	}
+	return rr.ipfsShell, nil
 }
 
 func (rr *ResourceRetriever) GetDataFromRemote(did, extData string, node Retriever) (string, error) {
@@ -257,7 +273,66 @@ func (rr *ResourceRetriever) RetrieveData(ctx context.Context, task RetrieverTas
 	return rr.Execute(ctx, task)
 }
 
-type CessRetrieveTask struct {
+type IpfsRetrievalTask struct {
+	Cid        string
+	User       string
+	FilePath   string
+	FiltePoint int
+	Filters    []RequestFilter
+	Executor
+	ToolsProvider
+}
+
+func NewIpfsRetrievalTask(cid, user, fpath string) *IpfsRetrievalTask {
+	return &IpfsRetrievalTask{Cid: cid, User: user, FilePath: fpath}
+}
+
+func (t *IpfsRetrievalTask) InjectResources(executor Executor, nodes NodesProvider, tools ToolsProvider, filters ...RequestFilter) {
+	t.Executor = executor
+	t.ToolsProvider = tools
+	t.Filters = filters
+}
+
+func (t *IpfsRetrievalTask) Execute(ctx context.Context) ([]string, error) {
+	for _, f := range t.Filters {
+		t.FiltePoint += f.Abort(t.User, t.Cid)
+	}
+	fpath, err := t.Executor.Executor(ctx, func(ctx context.Context, s string) (string, error) {
+		if !Abort(t.FiltePoint, ABORT_BACK_FETCH) {
+			return "", errors.Wrap(errors.New("abort retrieving data from IPFS node"), "execute worker error")
+		}
+		shell, err := t.GetIpfsShell()
+		if err != nil {
+			return "", errors.Wrap(err, "execute worker error")
+		}
+		reader, err := shell.Cat(t.Cid)
+		if err != nil {
+			return "", errors.Wrap(err, "execute worker error")
+		}
+
+		defer reader.Close()
+		file, err := os.Open(t.FilePath)
+		if err != nil {
+			return "", errors.Wrap(err, "execute worker error")
+		}
+		defer file.Close()
+
+		if _, err = io.Copy(file, reader); err != nil {
+			return "", errors.Wrap(err, "execute worker error")
+		}
+		return t.FilePath, nil
+	}, t.Cid)
+	if err != nil {
+		return nil, errors.Wrap(err, "execute IPFS Network data retrieval task error")
+	}
+	return []string{fpath}, nil
+}
+
+func (t IpfsRetrievalTask) String() string {
+	return fmt.Sprintf("[IPFS Network Retrieve Task]->{Cid: %s}", t.Cid)
+}
+
+type CessRetrievalTask struct {
 	Executor
 	NodesProvider
 	ToolsProvider
@@ -271,7 +346,7 @@ type CessRetrieveTask struct {
 }
 
 func NewCesRetrieveTask(cli *chain.Client, user, fid, segment string, fragments []string) RetrieverTask {
-	return &CessRetrieveTask{
+	return &CessRetrievalTask{
 		cli:       cli,
 		User:      user,
 		Fid:       fid,
@@ -280,14 +355,14 @@ func NewCesRetrieveTask(cli *chain.Client, user, fid, segment string, fragments 
 	}
 }
 
-func (t *CessRetrieveTask) InjectResources(executor Executor, nodes NodesProvider, tools ToolsProvider, filters ...RequestFilter) {
+func (t *CessRetrievalTask) InjectResources(executor Executor, nodes NodesProvider, tools ToolsProvider, filters ...RequestFilter) {
 	t.Executor = executor
 	t.NodesProvider = nodes
 	t.ToolsProvider = tools
 	t.Filters = filters
 }
 
-func (t CessRetrieveTask) Execute(ctx context.Context) ([]string, error) {
+func (t CessRetrievalTask) Execute(ctx context.Context) ([]string, error) {
 	//Query whether the data is reachable from this node
 	for _, f := range t.Filters {
 		t.FiltePoint += f.Abort(t.User, t.Fragments...)
@@ -301,7 +376,7 @@ func (t CessRetrieveTask) Execute(ctx context.Context) ([]string, error) {
 		fpaths := t.BatchExecutor(ctx, len(t.Fragments)-config.PARITY_NUM,
 			func(ctx context.Context, did string) (string, error) {
 				//access L2 cache to retrieve data from this node
-				if retriever.Info.Endpoint == "" && retriever.Info.Address == "" && Abort(t.FiltePoint, ABORT_BACK_FETCH) {
+				if retriever.Info.Endpoint == "" && retriever.Info.Address == "" && !Abort(t.FiltePoint, ABORT_BACK_FETCH) {
 					reqId, sign, err := t.SignRequestTool()
 					if err != nil {
 						return "", errors.Wrap(err, "execute worker error")
@@ -350,7 +425,7 @@ func (t CessRetrieveTask) Execute(ctx context.Context) ([]string, error) {
 	return fpaths, nil
 }
 
-func (t CessRetrieveTask) QueryStorageNodes() ([]string, error) {
+func (t CessRetrievalTask) QueryStorageNodes() ([]string, error) {
 	conf := config.GetConfig()
 	var nodes []string
 
@@ -382,6 +457,6 @@ func (t CessRetrieveTask) QueryStorageNodes() ([]string, error) {
 	return nodes, nil
 }
 
-func (t CessRetrieveTask) String() string {
+func (t CessRetrievalTask) String() string {
 	return fmt.Sprintf("[CESS Network Retrieve Task]->{Fid: %s, Segment: %s}", t.Fid, t.Segment)
 }

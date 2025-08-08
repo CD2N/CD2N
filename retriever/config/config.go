@@ -51,6 +51,7 @@ type ServerConfig struct {
 	RedisLoacl      string
 	TeeAddress      string
 	Endpoint        string
+	IpfsHost        string
 	RedisPwd        string
 	SvcPort         int
 }
@@ -94,7 +95,7 @@ const (
 	LEVELDB_DIR       = "leveldb"
 	CONF_DIR          = "conf"
 
-	TASKDB_NAME   = "task_record"
+	TASKDB_NAME = "task_record"
 
 	DB_SEGMENT_PREFIX  = "segment-"
 	DB_FILEPART_PREFIX = "filepart-"

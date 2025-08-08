@@ -123,6 +123,72 @@ type SignPayload struct {
 	Exp types.U32
 }
 
+type AccessInfo struct {
+	R types.H160
+	C []types.H160
+}
+
+type RoundRewardType struct {
+	TotalReward types.U128
+	OtherReward types.U128
+}
+
+type Individual struct {
+	Acc    types.AccountID
+	Reward types.U32
+}
+
+type StakingEraRewardPoints struct {
+	Total      types.U32
+	Individual []Individual
+}
+
+type StakingNominations struct {
+	Targets     []types.AccountID
+	SubmittedIn types.U32
+	Suppressed  types.Bool
+}
+
+type StakingValidatorPrefs struct {
+	Commission types.U32
+	Blocked    types.Bool
+}
+
+type UnlockChunk struct {
+	Value types.UCompact
+	Era   types.BlockNumber
+}
+
+type StakingLedger struct {
+	Stash          types.AccountID
+	Total          types.UCompact
+	Active         types.UCompact
+	Unlocking      []UnlockChunk
+	ClaimedRewards []types.U32
+}
+
+type StakingExposure struct {
+	Total  types.UCompact
+	Own    types.UCompact
+	Others []OtherStakingExposure
+}
+
+type OtherStakingExposure struct {
+	Who   types.AccountID
+	Value types.UCompact
+}
+type StakingExposurePaged struct {
+	PageTotal types.UCompact
+	Others    []OtherStakingExposure
+}
+
+type PagedExposureMetadata struct {
+	Total          types.UCompact
+	Own            types.UCompact
+	NominatorCount types.U32
+	PageCount      types.U32
+}
+
 func (p SignPayload) EncodeSignPayload() ([]byte, error) {
 	buf := bytes.NewBuffer(nil)
 	s := scale.NewEncoder(buf)

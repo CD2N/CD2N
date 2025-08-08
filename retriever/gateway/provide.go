@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -91,12 +92,11 @@ func (g *Gateway) ProvideFile(ctx context.Context, buffer *buffer.FileBuffer, ex
 		return nil
 	}
 
-	err = client.PutData(g.taskRecord, info.Fid, provideTask)
-	if err != nil {
+	if err = g.PutProvideTask(info.Fid, provideTask); err != nil {
 		return errors.Wrap(err, "provide file error")
 	}
-	err = client.PublishMessage(g.redisCli, ctx, client.CHANNEL_PROVIDE, ftask)
-	if err != nil {
+
+	if err = client.PublishMessage(g.redisCli, ctx, client.CHANNEL_PROVIDE, ftask); err != nil {
 		return errors.Wrap(err, "provide file error")
 	}
 	g.pstats.Ongoing.Add(1)
@@ -131,8 +131,7 @@ func (g *Gateway) ClaimFile(ctx context.Context, req tsproto.FileRequest) (FileR
 
 	g.keyLock.Lock(req.Fid)
 	var ftask task.ProvideTask
-	err = client.GetData(g.taskRecord, req.Fid, &ftask)
-	if err != nil {
+	if err = g.GetProvideTask(req.Fid, &ftask); err != nil {
 		g.keyLock.Delete(req.Fid) // task done, remove the key-value lock
 		return resp, errors.Wrap(err, "claim file error")
 	}
@@ -166,8 +165,8 @@ func (g *Gateway) ClaimFile(ctx context.Context, req tsproto.FileRequest) (FileR
 		resp.Fragments = append(resp.Fragments, ftask.Fragments[i][gid])
 	}
 	resp.Fid = req.Fid
-	err = client.PutData(g.taskRecord, req.Fid, ftask)
-	if err != nil {
+	// err = client.PutData(g.taskRecord, req.Fid, ftask)
+	if err = g.PutProvideTask(req.Fid, ftask); err != nil {
 		return resp, errors.Wrap(err, "claim file error")
 	}
 	return resp, nil
@@ -181,8 +180,7 @@ func (g *Gateway) FetchFile(ctx context.Context, fid, did, token string) (string
 	g.keyLock.Lock(fid)
 	defer g.keyLock.Unlock(fid)
 	var task task.ProvideTask
-	err := client.GetData(g.taskRecord, fid, &task)
-	if err != nil {
+	if err := g.GetProvideTask(fid, &task); err != nil {
 		return fpath, errors.Wrap(err, "fetch file error")
 	}
 	subTask, ok := task.SubTasks[token]
@@ -198,8 +196,7 @@ func (g *Gateway) FetchFile(ctx context.Context, fid, did, token string) (string
 	}
 	subTask.Index++
 	task.SubTasks[token] = subTask
-	err = client.PutData(g.taskRecord, fid, task)
-	if err != nil {
+	if err := g.PutProvideTask(fid, task); err != nil {
 		return fpath, errors.Wrap(err, "fetch file error")
 	}
 	return fpath, nil
@@ -220,20 +217,28 @@ func (g *Gateway) ProvideTaskChecker(ctx context.Context, buffer *buffer.FileBuf
 }
 
 func (g *Gateway) checker(ctx context.Context, buffer *buffer.FileBuffer, stat Statistics) error {
-	err := client.DbIterator(g.taskRecord,
-		func(key []byte) error {
+	keys, err := client.GetKeysByPrefix(g.redisCli, fmt.Sprintf("%s-ftask_key-", g.nodeAcc))
+	if err != nil {
+		return errors.Wrap(err, "check provide task error")
+	}
+	for _, key := range keys {
+		select {
+		case <-ctx.Done():
+		default:
+		}
+		if err := func(key string) error {
 			select {
 			case <-ctx.Done():
 			default:
 			}
 			var ftask task.ProvideTask
-			fid := string(key)
+			fid, _ := strings.CutPrefix(key, fmt.Sprintf("%s-ftask_key-", g.nodeAcc))
 			if strings.Contains(fid, config.DB_SEGMENT_PREFIX) {
 				return nil
 			}
 			g.keyLock.Lock(fid)
 			defer g.keyLock.Unlock(fid)
-			if err := client.GetData(g.taskRecord, fid, &ftask); err != nil {
+			if err := g.GetProvideTask(fid, &ftask); err != nil {
 				return err
 			}
 
@@ -247,8 +252,7 @@ func (g *Gateway) checker(ctx context.Context, buffer *buffer.FileBuffer, stat S
 				}
 				g.pstats.TaskDone(fid)
 				g.keyLock.RemoveLock(fid)
-				client.DeleteData(g.taskRecord, fid)
-
+				client.DeleteMessage(g.redisCli, context.Background(), key)
 				return nil
 			}
 			done := 0
@@ -301,7 +305,7 @@ func (g *Gateway) checker(ctx context.Context, buffer *buffer.FileBuffer, stat S
 					logger.GetLogger(config.LOG_PROVIDER).Error(err)
 				}
 			}
-			if err := client.PutData(g.taskRecord, fid, ftask); err != nil {
+			if err := g.PutProvideTask(fid, ftask); err != nil {
 				logger.GetLogger(config.LOG_PROVIDER).Error(err)
 				return nil
 			}
@@ -310,10 +314,108 @@ func (g *Gateway) checker(ctx context.Context, buffer *buffer.FileBuffer, stat S
 				g.pstats.Fids.Delete(fid)
 			}
 			return nil
-		},
-	)
-	return errors.Wrap(err, "check provide task error")
+		}(key); err != nil {
+			return errors.Wrap(err, "check provide task error")
+		}
+	}
+	return nil
 }
+
+// func (g *Gateway) checker2(ctx context.Context, buffer *buffer.FileBuffer, stat Statistics) error {
+// 	err := client.DbIterator(g.taskRecord,
+// 		func(key []byte) error {
+// 			select {
+// 			case <-ctx.Done():
+// 			default:
+// 			}
+// 			var ftask task.ProvideTask
+// 			fid := string(key)
+// 			if strings.Contains(fid, config.DB_SEGMENT_PREFIX) {
+// 				return nil
+// 			}
+// 			g.keyLock.Lock(fid)
+// 			defer g.keyLock.Unlock(fid)
+// 			if err := client.GetData(g.taskRecord, fid, &ftask); err != nil {
+// 				return err
+// 			}
+
+// 			gcflag := TaskNeedToBeGC(ftask)
+// 			if ftask.WorkDone || gcflag {
+// 				if gcflag {
+// 					TaskGc(buffer, ftask)
+// 					logger.GetLogger(config.LOG_PROVIDER).Infof("file %s expires and task is collected. \n", fid)
+// 				} else {
+// 					logger.GetLogger(config.LOG_PROVIDER).Infof("file %s distribute workflow done. \n", fid)
+// 				}
+// 				g.pstats.TaskDone(fid)
+// 				g.keyLock.RemoveLock(fid)
+// 				client.DeleteData(g.taskRecord, fid)
+
+// 				return nil
+// 			}
+// 			done := 0
+// 			cli, err := g.GetCessClient()
+// 			if err != nil {
+// 				logger.GetLogger(config.LOG_PROVIDER).Error(err)
+// 				return nil
+// 			}
+// 			cmpSet, err := retriever.QueryDealMap(cli, fid)
+// 			if err == nil {
+// 				for k, v := range ftask.SubTasks {
+// 					if _, ok := cmpSet[v.GroupId+1]; v.Index == ftask.GroupSize && ok {
+// 						v.Done = time.Now().Format(config.TIME_LAYOUT)
+// 						done++
+// 						ftask.SubTasks[k] = v
+// 						RemoveSubTaskFiles(buffer, v.GroupId, ftask)
+// 						continue
+// 					}
+// 					upt, err := time.Parse(config.TIME_LAYOUT, v.Timestamp)
+// 					if err != nil {
+// 						continue
+// 					}
+// 					if time.Since(upt) >= task.PROVIDE_TASK_CHECK_TIME*2 {
+// 						if stat != nil {
+// 							stat.StatTimes(v.Claimant)
+// 						}
+// 						logger.GetLogger(config.LOG_PROVIDER).Infof("remove subtask %d of file %s, timeout!", v.GroupId+1, fid)
+// 						ftask.DelSubTask(v.GroupId)
+// 						delete(ftask.SubTasks, k)
+// 					}
+// 				}
+// 			} else if strings.Contains(err.Error(), "data not found") {
+// 				logger.GetLogger(config.LOG_PROVIDER).Infof("file %s data distribution completed.", fid)
+// 				done = task.PROVIDE_TASK_GROUP_NUM
+// 			} else {
+// 				logger.GetLogger(config.LOG_PROVIDER).Error(err)
+// 				return nil
+// 			}
+
+// 			if done == task.PROVIDE_TASK_GROUP_NUM {
+// 				logger.GetLogger(config.LOG_PROVIDER).Infof("file %s be distributed done. \n", fid)
+// 				ftask.WorkDone = true
+// 			} else if len(ftask.SubTasks) < task.PROVIDE_TASK_GROUP_NUM {
+// 				err := client.PublishMessage(g.redisCli, ctx, client.CHANNEL_PROVIDE, ftask.Task)
+// 				if err == nil {
+// 					ftask.Retry += 1
+// 					g.pstats.TaskFlash(fid)
+// 					logger.GetLogger(config.LOG_PROVIDER).Infof("redistribute file %s. \n", fid)
+// 				} else {
+// 					logger.GetLogger(config.LOG_PROVIDER).Error(err)
+// 				}
+// 			}
+// 			if err := client.PutData(g.taskRecord, fid, ftask); err != nil {
+// 				logger.GetLogger(config.LOG_PROVIDER).Error(err)
+// 				return nil
+// 			}
+// 			if done == task.PROVIDE_TASK_GROUP_NUM {
+// 				//remove fid from provide task stats
+// 				g.pstats.Fids.Delete(fid)
+// 			}
+// 			return nil
+// 		},
+// 	)
+// 	return errors.Wrap(err, "check provide task error")
+// }
 
 func RemoveSubTaskFiles(buffer *buffer.FileBuffer, groupId int, ftask task.ProvideTask) error {
 	for i := range ftask.Fragments {

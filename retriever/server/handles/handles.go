@@ -24,8 +24,8 @@ import (
 	"github.com/decred/base58"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 	"github.com/pkg/errors"
-	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/vedhavyas/go-subkey"
 	"golang.org/x/crypto/blake2b"
 )
@@ -37,12 +37,13 @@ type ServerHandle struct {
 	gateway     *gateway.Gateway
 	buffer      *buffer.FileBuffer
 	Ac          *AccessController
-	partRecord  *leveldb.DB
+	partRecord  *redis.Client //*leveldb.DB
 	filepartMap *sync.Map
 	ossPubkey   []byte
 	teeEndpoint string
 	teePubkey   []byte
 	teeAddr     string
+	nodeAddr    string
 	poolId      string
 }
 
@@ -117,16 +118,13 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 		return errors.Wrap(err, "init handles runtime error")
 	}
 
-	// init level databases
-	log.Println("init level databases ...")
-	if err := client.RegisterLeveldbCli(
-		filepath.Join(conf.WorkSpace, config.LEVELDB_DIR), config.TASKDB_NAME,
-	); err != nil {
-		return errors.Wrap(err, "init handles runtime error")
-	}
-
-	h.partRecord = client.GetLeveldbCli(config.TASKDB_NAME)
-
+	// // init level databases
+	// log.Println("init level databases ...")
+	// if err := client.RegisterLeveldbCli(
+	// 	filepath.Join(conf.WorkSpace, config.LEVELDB_DIR), config.TASKDB_NAME,
+	// ); err != nil {
+	// 	return errors.Wrap(err, "init handles runtime error")
+	// }
 	// register nodes
 	log.Println("register nodes ...")
 	contractCli, err := h.registerNode(conf)
@@ -136,6 +134,8 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 
 	log.Println("init cd2n base module(redis client) ...")
 	redisCli := client.NewRedisClient(conf.RedisLoacl, "retriever", conf.RedisPwd)
+	h.partRecord = redisCli
+	h.nodeAddr = contractCli.Node.Hex()
 
 	h.buffer, err = buffer.NewFileBuffer(
 		uint64(conf.FileBufferSize),
@@ -198,7 +198,7 @@ func (h *ServerHandle) InitHandlesRuntime(ctx context.Context) error {
 	log.Println("init gateway model ...")
 	if h.gateway, err = gateway.NewGateway(
 		redisCli, contractCli, fileCacher,
-		client.GetLeveldbCli(config.TASKDB_NAME),
+		// 	client.GetLeveldbCli(config.TASKDB_NAME),
 	); err != nil {
 		return errors.Wrap(err, "init handles runtime error")
 	}
@@ -414,6 +414,10 @@ func (h *ServerHandle) GetPreCapsule(c *gin.Context) {
 			"pubkey":  pubkey[:],
 		}),
 	)
+}
+
+func (h *ServerHandle) AddNodeAddressHeader(c *gin.Context) {
+	c.Header("NodeAddress", h.nodeAddr)
 }
 
 type ReencryptReq struct {
